@@ -1,6 +1,7 @@
 #include "ui.h"
 
 #include <Arduino.h>
+#include <cstring>
 
 #ifndef LV_CONF_INCLUDE_SIMPLE
 #define LV_CONF_INCLUDE_SIMPLE
@@ -50,6 +51,8 @@ static lv_obj_t* g_todayLabel = nullptr;
 static lv_obj_t* g_goalLabel = nullptr;
 static lv_obj_t* g_yearLabel = nullptr;
 static lv_obj_t* g_heatCells[30] = {nullptr};
+static uint8_t g_lastHeatLevels[30] = {0};
+static bool g_heatmapInitialized = false;
 
 static ui_action_callback_t g_refreshCallback = nullptr;
 static ui_action_callback_t g_tapWakeCallback = nullptr;
@@ -239,12 +242,22 @@ void ui_show_dashboard() {
   if (g_dashboardContainer == nullptr || g_offlineContainer == nullptr) {
     return;
   }
+  const bool dashboardHidden = lv_obj_has_flag(g_dashboardContainer, LV_OBJ_FLAG_HIDDEN);
+  const bool offlineHidden = lv_obj_has_flag(g_offlineContainer, LV_OBJ_FLAG_HIDDEN);
+  if (!dashboardHidden && offlineHidden) {
+    return;
+  }
   lv_obj_clear_flag(g_dashboardContainer, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(g_offlineContainer, LV_OBJ_FLAG_HIDDEN);
 }
 
 void ui_show_offline() {
   if (g_dashboardContainer == nullptr || g_offlineContainer == nullptr) {
+    return;
+  }
+  const bool dashboardHidden = lv_obj_has_flag(g_dashboardContainer, LV_OBJ_FLAG_HIDDEN);
+  const bool offlineHidden = lv_obj_has_flag(g_offlineContainer, LV_OBJ_FLAG_HIDDEN);
+  if (dashboardHidden && !offlineHidden) {
     return;
   }
   lv_obj_add_flag(g_dashboardContainer, LV_OBJ_FLAG_HIDDEN);
@@ -258,7 +271,10 @@ void ui_set_today(uint16_t todayCount) {
 
   char buf[12];
   snprintf(buf, sizeof(buf), "%u", static_cast<unsigned>(todayCount));
-  lv_label_set_text(g_todayLabel, buf);
+  const char* current = lv_label_get_text(g_todayLabel);
+  if (current == nullptr || strcmp(current, buf) != 0) {
+    lv_label_set_text(g_todayLabel, buf);
+  }
 }
 
 void ui_set_goal(uint16_t dailyGoal) {
@@ -268,7 +284,10 @@ void ui_set_goal(uint16_t dailyGoal) {
 
   char buf[24];
   snprintf(buf, sizeof(buf), "Goal %u", static_cast<unsigned>(dailyGoal));
-  lv_label_set_text(g_goalLabel, buf);
+  const char* current = lv_label_get_text(g_goalLabel);
+  if (current == nullptr || strcmp(current, buf) != 0) {
+    lv_label_set_text(g_goalLabel, buf);
+  }
 }
 
 void ui_set_year(uint32_t yearTotal) {
@@ -278,7 +297,10 @@ void ui_set_year(uint32_t yearTotal) {
 
   char buf[28];
   snprintf(buf, sizeof(buf), "Year %lu", static_cast<unsigned long>(yearTotal));
-  lv_label_set_text(g_yearLabel, buf);
+  const char* current = lv_label_get_text(g_yearLabel);
+  if (current == nullptr || strcmp(current, buf) != 0) {
+    lv_label_set_text(g_yearLabel, buf);
+  }
 }
 
 void ui_set_heatmap(const DayEntry days[30]) {
@@ -288,9 +310,15 @@ void ui_set_heatmap(const DayEntry days[30]) {
     }
 
     const uint8_t level = days[i].heatLevel;
+    if (g_heatmapInitialized && g_lastHeatLevels[i] == level) {
+      continue;
+    }
     lv_obj_set_style_bg_color(g_heatCells[i], heat_color(level), 0);
     lv_obj_set_style_bg_opa(g_heatCells[i], heat_opa(level), 0);
+    g_lastHeatLevels[i] = level;
   }
+
+  g_heatmapInitialized = true;
 }
 
 void ui_set_refresh_callback(ui_action_callback_t callback) {

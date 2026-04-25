@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <cstring>
 
 #ifndef LV_CONF_INCLUDE_SIMPLE
 #define LV_CONF_INCLUDE_SIMPLE
@@ -23,8 +24,30 @@ static uint32_t g_lastInteractionMs = 0;
 static Board* g_board = nullptr;
 static bool g_displayReady = false;
 static volatile bool g_refreshRequested = false;
+static PullupDashboardData g_lastShownData = {};
+static bool g_hasLastShownData = false;
 
 static void refresh_from_api();
+
+static bool day_entry_equal(const DayEntry& a, const DayEntry& b) {
+  return (a.count == b.count) && (a.heatLevel == b.heatLevel) &&
+         (strncmp(a.date, b.date, sizeof(a.date)) == 0);
+}
+
+static bool dashboard_data_equal(const PullupDashboardData& a,
+                                 const PullupDashboardData& b) {
+  if (a.dailyGoal != b.dailyGoal || a.yearTotal != b.yearTotal || a.valid != b.valid) {
+    return false;
+  }
+
+  for (uint8_t i = 0; i < 30; i++) {
+    if (!day_entry_equal(a.days[i], b.days[i])) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 static bool init_display_and_touch() {
   g_board = new Board();
@@ -76,10 +99,15 @@ static void refresh_from_api() {
   }
 
   if (apiOk) {
-    ui_set_today(data.days[29].count);
-    ui_set_goal(data.dailyGoal);
-    ui_set_year(data.yearTotal);
-    ui_set_heatmap(data.days);
+    const bool changed = !g_hasLastShownData || !dashboard_data_equal(g_lastShownData, data);
+    if (changed) {
+      ui_set_today(data.days[29].count);
+      ui_set_goal(data.dailyGoal);
+      ui_set_year(data.yearTotal);
+      ui_set_heatmap(data.days);
+      g_lastShownData = data;
+      g_hasLastShownData = true;
+    }
     ui_show_dashboard();
   } else {
     ui_show_offline();

@@ -43,7 +43,7 @@
 #endif
 
 #ifndef LVGL_PORT_ROTATION_DEGREE
-#define LVGL_PORT_ROTATION_DEGREE               (90)
+#define LVGL_PORT_ROTATION_DEGREE               (270)
 #endif
 
 #if (LVGL_PORT_ROTATION_DEGREE != 0) && (LVGL_PORT_ROTATION_DEGREE != 90) && \
