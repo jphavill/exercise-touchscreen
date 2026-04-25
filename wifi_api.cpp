@@ -14,15 +14,20 @@ static bool parse_payload(const String& payload, PullupDashboardData& outData) {
   DynamicJsonDocument doc(16384);
   DeserializationError err = deserializeJson(doc, payload);
   if (err) {
+    Serial.print("[API] JSON parse error: ");
+    Serial.println(err.c_str());
     return false;
   }
 
   if (!doc["year_total"].is<uint32_t>() || !doc["daily_goal"].is<uint16_t>()) {
+    Serial.println("[API] Missing or invalid year_total/daily_goal");
     return false;
   }
 
   JsonArray last30 = doc["last_30_days"].as<JsonArray>();
   if (last30.isNull() || last30.size() != 30) {
+    Serial.print("[API] last_30_days invalid size: ");
+    Serial.println(last30.isNull() ? -1 : static_cast<int>(last30.size()));
     return false;
   }
 
@@ -33,6 +38,8 @@ static bool parse_payload(const String& payload, PullupDashboardData& outData) {
     JsonObject day = last30[i].as<JsonObject>();
     if (day.isNull() || !day["date"].is<const char*>() || !day["count"].is<uint16_t>() ||
         !day["heat_level"].is<uint8_t>()) {
+      Serial.print("[API] Invalid day entry at index ");
+      Serial.println(static_cast<int>(i));
       return false;
     }
 
@@ -52,6 +59,8 @@ bool wifi_connect() {
     return true;
   }
 
+  Serial.print("[WIFI] Connecting to SSID: ");
+  Serial.println(WIFI_SSID);
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
@@ -60,7 +69,16 @@ bool wifi_connect() {
     delay(WIFI_RETRY_DELAY_MS);
   }
 
-  return WiFi.status() == WL_CONNECTED;
+  const bool connected = (WiFi.status() == WL_CONNECTED);
+  if (connected) {
+    Serial.print("[WIFI] Connected, IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.print("[WIFI] Connect failed, status: ");
+    Serial.println(static_cast<int>(WiFi.status()));
+  }
+
+  return connected;
 }
 
 bool api_fetch_data(PullupDashboardData& outData) {
@@ -72,17 +90,28 @@ bool api_fetch_data(PullupDashboardData& outData) {
 
   HTTPClient http;
   if (!http.begin(API_URL)) {
+    Serial.print("[API] http.begin failed for URL: ");
+    Serial.println(API_URL);
     return false;
   }
 
+  http.addHeader("X-Timezone", "America/Halifax");
+
+  Serial.print("[API] GET ");
+  Serial.println(API_URL);
   const int code = http.GET();
   if (code != HTTP_CODE_OK) {
+    Serial.print("[API] HTTP GET failed, code: ");
+    Serial.println(code);
     http.end();
     return false;
   }
 
   String payload = http.getString();
   http.end();
+
+  Serial.print("[API] Payload bytes: ");
+  Serial.println(payload.length());
 
   return parse_payload(payload, outData);
 }

@@ -1,0 +1,16 @@
+/*
+ * SPDX-FileCopyrightText: 2024-2025 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#pragma once
+
+#define ESP_UTILS_CONF_CHECK_HANDLE_METHOD                  (ESP_UTILS_CHECK_HANDLE_WITH_ERROR_LOG)
+#define ESP_UTILS_CONF_LOG_LEVEL                            (ESP_UTILS_LOG_LEVEL_INFO)
+
+#define ESP_UTILS_CONF_MEM_GEN_ALLOC_DEFAULT_ENABLE         (1)
+#define ESP_UTILS_CONF_MEM_GEN_ALLOC_TYPE                   (ESP_UTILS_MEM_ALLOC_TYPE_STDLIB)
+
+#define ESP_UTILS_CONF_FILE_VERSION_MAJOR 1
+#define ESP_UTILS_CONF_FILE_VERSION_MINOR 2
+#define ESP_UTILS_CONF_FILE_VERSION_PATCH 0

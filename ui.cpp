@@ -1,6 +1,11 @@
 #include "ui.h"
 
 #include <Arduino.h>
+
+#ifndef LV_CONF_INCLUDE_SIMPLE
+#define LV_CONF_INCLUDE_SIMPLE
+#endif
+
 #include <lvgl.h>
 
 #if LV_FONT_MONTSERRAT_48

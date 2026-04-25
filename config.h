@@ -1,11 +1,12 @@
 #pragma once
 
 #include <Arduino.h>
+#include "secrets.h"
 
 // Network/API constants
-const char* WIFI_SSID = "YOUR_WIFI_NAME";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* API_URL = "http://YOUR_API_ENDPOINT";
+constexpr char WIFI_SSID[] = SECRET_WIFI_SSID;
+constexpr char WIFI_PASSWORD[] = SECRET_WIFI_PASSWORD;
+constexpr char API_URL[] = "http://192.168.1.208:8003/api/widgets/pullups";
 const uint32_t API_REFRESH_MS = 60000;
 
 // Wi-Fi connect behavior
