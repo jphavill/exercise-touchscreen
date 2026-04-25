@@ -14,7 +14,7 @@
 
 using namespace esp_panel::drivers;
 
-#define LVGL_PORT_ENABLE_ROTATION_OPTIMIZED     (1)
+#define LVGL_PORT_ENABLE_ROTATION_OPTIMIZED     (0)
 #define LVGL_PORT_BUFFER_NUM_MAX                (2)
 
 static SemaphoreHandle_t lvgl_mux = nullptr;
@@ -42,21 +42,22 @@ static void *get_next_frame_buffer(LCD *lcd)
 __attribute__((always_inline))
 static inline void copy_pixel_8bpp(uint8_t *to, const uint8_t *from)
 {
-    *to++ = *from++;
+    to[0] = from[0];
 }
 
 __attribute__((always_inline))
 static inline void copy_pixel_16bpp(uint8_t *to, const uint8_t *from)
 {
-    *(uint16_t *)to++ = *(const uint16_t *)from++;
+    to[0] = from[0];
+    to[1] = from[1];
 }
 
 __attribute__((always_inline))
 static inline void copy_pixel_24bpp(uint8_t *to, const uint8_t *from)
 {
-    *to++ = *from++;
-    *to++ = *from++;
-    *to++ = *from++;
+    to[0] = from[0];
+    to[1] = from[1];
+    to[2] = from[2];
 }
 
 #define _COPY_PIXEL(_bpp, to, from) copy_pixel_##_bpp##bpp(to, from)
@@ -156,6 +157,7 @@ IRAM_ATTR static inline void rotate_copy_pixel(
     int from_bytes_per_piexl = sizeof(lv_color_t);
     int from_bytes_per_line = w * from_bytes_per_piexl;
     int from_index = 0;
+    int from_index_const = 0;
 
     int to_bytes_per_piexl = LV_COLOR_DEPTH >> 3;
     int to_bytes_per_line;
@@ -184,7 +186,6 @@ IRAM_ATTR static inline void rotate_copy_pixel(
 #if (LV_COLOR_DEPTH == 16) && LVGL_PORT_ENABLE_ROTATION_OPTIMIZED
         ROTATE_270_OPTIMIZED_16BPP(32, 256);
 #else
-        int from_index_const = 0;
         ROTATE_270_ALL_BPP();
 #endif
         break;
@@ -538,7 +539,7 @@ static lv_disp_t *display_init(LCD *lcd)
     ESP_UTILS_LOGD("Register display driver to LVGL");
     lv_disp_drv_init(&disp_drv);
     disp_drv.flush_cb = flush_callback;
-#if (LVGL_PORT_ROTATION_DEGREE == 90) || (LVGL_PORT_ROTATION_DEGREE == 270)
+#if LVGL_PORT_AVOID_TEAR && ((LVGL_PORT_ROTATION_DEGREE == 90) || (LVGL_PORT_ROTATION_DEGREE == 270))
     disp_drv.hor_res = lcd_height;
     disp_drv.ver_res = lcd_width;
 #else
@@ -677,7 +678,15 @@ bool lvgl_port_init(LCD *lcd, Touch *tp)
         "Avoid tearing function only works with RGB/MIPI-DSI LCD now"
     );
     ESP_UTILS_LOGI(
-        "Avoid tearing is enabled, mode: %d, rotation: %d", LVGL_PORT_AVOID_TEARING_MODE, LVGL_PORT_ROTATION_DEGREE
+        "LVGL config: avoid_tear=1 mode=%d rotation=%d buffers=%d",
+        LVGL_PORT_AVOID_TEARING_MODE,
+        LVGL_PORT_ROTATION_DEGREE,
+        LVGL_PORT_DISP_BUFFER_NUM
+    );
+#else
+    ESP_UTILS_LOGI(
+        "LVGL config: avoid_tear=0 rotation=%d",
+        LVGL_PORT_ROTATION_DEGREE
     );
 #endif
 
@@ -692,7 +701,19 @@ bool lvgl_port_init(LCD *lcd, Touch *tp)
     ESP_UTILS_LOGI("Initializing LVGL display driver");
     disp = display_init(lcd);
     ESP_UTILS_CHECK_NULL_RETURN(disp, false, "Initialize LVGL display driver failed");
+#if LVGL_PORT_AVOID_TEAR
     lv_disp_set_rotation(disp, LV_DISP_ROT_NONE);
+#else
+#if LVGL_PORT_ROTATION_DEGREE == 90
+    lv_disp_set_rotation(disp, LV_DISP_ROT_90);
+#elif LVGL_PORT_ROTATION_DEGREE == 180
+    lv_disp_set_rotation(disp, LV_DISP_ROT_180);
+#elif LVGL_PORT_ROTATION_DEGREE == 270
+    lv_disp_set_rotation(disp, LV_DISP_ROT_270);
+#else
+    lv_disp_set_rotation(disp, LV_DISP_ROT_NONE);
+#endif
+#endif
 
     if (bus_type != ESP_PANEL_BUS_TYPE_RGB) {
         ESP_UTILS_LOGD("Attach refresh finish callback to LCD");
@@ -704,7 +725,7 @@ bool lvgl_port_init(LCD *lcd, Touch *tp)
         indev = indev_init(tp);
         ESP_UTILS_CHECK_NULL_RETURN(indev, false, "Initialize LVGL input driver failed");
 
-#if LVGL_PORT_ROTATION_DEGREE != 0
+#if LVGL_PORT_AVOID_TEAR && (LVGL_PORT_ROTATION_DEGREE != 0)
         auto &transformation = tp->getTransformation();
 #if LVGL_PORT_ROTATION_DEGREE == 90
         tp->swapXY(!transformation.swap_xy);

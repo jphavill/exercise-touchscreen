@@ -22,14 +22,13 @@ static uint32_t g_lastApiFetchMs = 0;
 static uint32_t g_lastInteractionMs = 0;
 static Board* g_board = nullptr;
 static bool g_displayReady = false;
+static volatile bool g_refreshRequested = false;
 
 static void refresh_from_api();
 
 static bool init_display_and_touch() {
-  Serial.println("[BOOT] init_display_and_touch: start");
   g_board = new Board();
   if (!g_board) {
-    Serial.println("[BOOT] Board allocation failed");
     return false;
   }
   g_board->init();
@@ -47,12 +46,10 @@ static bool init_display_and_touch() {
 #endif
 
   if (!g_board->begin()) {
-    Serial.println("[BOOT] board->begin() failed");
     return false;
   }
 
   lvgl_port_init(g_board->getLCD(), g_board->getTouch());
-  Serial.println("[BOOT] init_display_and_touch: done");
   return true;
 }
 
@@ -63,7 +60,7 @@ static void mark_activity_and_wake() {
 
 static void on_refresh_button() {
   mark_activity_and_wake();
-  refresh_from_api();
+  g_refreshRequested = true;
 }
 
 static void on_tap_wake() {
@@ -93,16 +90,12 @@ static void refresh_from_api() {
 
 void setup() {
   Serial.begin(115200);
-  delay(150);
-  Serial.println("[BOOT] setup start");
 
   g_displayReady = init_display_and_touch();
   power_init();
   presence_init();
-  Serial.println("[BOOT] power + presence initialized");
 
   if (!g_displayReady) {
-    Serial.println("[BOOT] display init failed; halting");
     return;
   }
 
@@ -116,18 +109,15 @@ void setup() {
   mark_activity_and_wake();
 
   if (!wifi_connect()) {
-    Serial.println("[BOOT] wifi connect failed");
     if (lvgl_port_lock(-1)) {
       ui_show_offline();
       lvgl_port_unlock();
     }
   } else {
-    Serial.println("[BOOT] wifi connected; fetching API");
     refresh_from_api();
   }
 
   g_lastApiFetchMs = millis();
-  Serial.println("[BOOT] setup done");
 }
 
 void loop() {
@@ -149,7 +139,11 @@ void loop() {
     backlight_dim();
   }
 
-  if ((now - g_lastApiFetchMs) >= API_REFRESH_MS) {
+  if (g_refreshRequested) {
+    g_refreshRequested = false;
+    g_lastApiFetchMs = now;
+    refresh_from_api();
+  } else if ((now - g_lastApiFetchMs) >= API_REFRESH_MS) {
     g_lastApiFetchMs = now;
     refresh_from_api();
   }
