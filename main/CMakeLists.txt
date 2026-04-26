@@ -5,7 +5,7 @@ idf_component_register(
         "wifi_api.cpp"
         "power.cpp"
         "presence.cpp"
-        "lvgl_v8_port.cpp"
+        "lvgl_port.cpp"
     INCLUDE_DIRS
         "."
 )

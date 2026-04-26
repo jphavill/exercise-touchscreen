@@ -57,14 +57,15 @@ static bool g_heatmapInitialized = false;
 static ui_action_callback_t g_refreshCallback = nullptr;
 static ui_action_callback_t g_tapWakeCallback = nullptr;
 
-static constexpr lv_coord_t kHeatCellSize = 58;
-static constexpr lv_coord_t kHeatGap = 8;
+static constexpr lv_coord_t kHeatCellSize = 44;
+static constexpr lv_coord_t kHeatGap = 6;
 static constexpr lv_coord_t kHeatPad = 8;
 static lv_coord_t kHeatCols[] = {LV_GRID_CONTENT, LV_GRID_CONTENT, LV_GRID_CONTENT,
-                                 LV_GRID_CONTENT, LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST};
+                                 LV_GRID_TEMPLATE_LAST};
 static lv_coord_t kHeatRows[] = {LV_GRID_CONTENT, LV_GRID_CONTENT, LV_GRID_CONTENT,
                                  LV_GRID_CONTENT, LV_GRID_CONTENT, LV_GRID_CONTENT,
-                                 LV_GRID_TEMPLATE_LAST};
+                                 LV_GRID_CONTENT, LV_GRID_CONTENT, LV_GRID_CONTENT,
+                                 LV_GRID_CONTENT, LV_GRID_TEMPLATE_LAST};
 
 static lv_color_t heat_color(uint8_t level) {
   switch (level) {
@@ -117,28 +118,29 @@ void ui_init() {
   lv_obj_set_size(g_dashboardContainer, LV_PCT(100), LV_PCT(100));
   lv_obj_set_style_bg_color(g_dashboardContainer, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(g_dashboardContainer, LV_OPA_COVER, 0);
-  lv_obj_set_style_pad_all(g_dashboardContainer, 18, 0);
+  lv_obj_set_style_pad_all(g_dashboardContainer, 16, 0);
   lv_obj_set_layout(g_dashboardContainer, LV_LAYOUT_FLEX);
   lv_obj_set_flex_flow(g_dashboardContainer, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(g_dashboardContainer, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(g_dashboardContainer, 10, 0);
+  lv_obj_set_style_pad_row(g_dashboardContainer, 12, 0);
   register_tap_target(g_dashboardContainer);
 
   lv_obj_t* topRow = lv_obj_create(g_dashboardContainer);
   lv_obj_remove_style_all(topRow);
-  lv_obj_set_size(topRow, LV_PCT(100), LV_PCT(24));
+  lv_obj_set_size(topRow, LV_PCT(100), LV_SIZE_CONTENT);
   lv_obj_set_layout(topRow, LV_LAYOUT_FLEX);
-  lv_obj_set_flex_flow(topRow, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(topRow, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+  lv_obj_set_flex_flow(topRow, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(topRow, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(topRow, 8, 0);
   register_tap_target(topRow);
 
   lv_obj_t* pullupsGroup = lv_obj_create(topRow);
   lv_obj_remove_style_all(pullupsGroup);
   lv_obj_set_layout(pullupsGroup, LV_LAYOUT_FLEX);
   lv_obj_set_flex_flow(pullupsGroup, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(pullupsGroup, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+  lv_obj_set_flex_align(pullupsGroup, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_row(pullupsGroup, 2, 0);
   register_tap_target(pullupsGroup);
 
@@ -152,12 +154,21 @@ void ui_init() {
   lv_obj_set_style_text_color(g_todayLabel, lv_color_hex(0xF2F7FF), 0);
   lv_obj_set_style_text_font(g_todayLabel, UI_FONT_TODAY, 0);
 
-  g_goalLabel = lv_label_create(topRow);
+  lv_obj_t* metaRow = lv_obj_create(topRow);
+  lv_obj_remove_style_all(metaRow);
+  lv_obj_set_width(metaRow, LV_PCT(100));
+  lv_obj_set_layout(metaRow, LV_LAYOUT_FLEX);
+  lv_obj_set_flex_flow(metaRow, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(metaRow, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  register_tap_target(metaRow);
+
+  g_goalLabel = lv_label_create(metaRow);
   lv_label_set_text(g_goalLabel, "Goal 0");
   lv_obj_set_style_text_color(g_goalLabel, lv_color_hex(0xB9C8D8), 0);
   lv_obj_set_style_text_font(g_goalLabel, UI_FONT_META, 0);
 
-  g_yearLabel = lv_label_create(topRow);
+  g_yearLabel = lv_label_create(metaRow);
   lv_label_set_text(g_yearLabel, "Year 0");
   lv_obj_set_style_text_color(g_yearLabel, lv_color_hex(0xB9C8D8), 0);
   lv_obj_set_style_text_font(g_yearLabel, UI_FONT_META, 0);
@@ -180,8 +191,8 @@ void ui_init() {
   lv_obj_t* heatmapWrap = lv_obj_create(g_dashboardContainer);
   lv_obj_remove_style_all(heatmapWrap);
   lv_obj_set_size(heatmapWrap,
-                  (kHeatCellSize * 5) + (kHeatGap * 4) + (kHeatPad * 2),
-                  (kHeatCellSize * 6) + (kHeatGap * 5) + (kHeatPad * 2));
+                  (kHeatCellSize * 3) + (kHeatGap * 2) + (kHeatPad * 2),
+                  (kHeatCellSize * 10) + (kHeatGap * 9) + (kHeatPad * 2));
   lv_obj_set_style_pad_all(heatmapWrap, kHeatPad, 0);
   lv_obj_set_layout(heatmapWrap, LV_LAYOUT_GRID);
   lv_obj_set_style_grid_column_dsc_array(heatmapWrap, kHeatCols, 0);
@@ -199,8 +210,8 @@ void ui_init() {
     lv_obj_set_style_bg_color(cell, heat_color(0), 0);
     lv_obj_set_style_bg_opa(cell, LV_OPA_COVER, 0);
 
-    const uint8_t col = i % 5;
-    const uint8_t row = i / 5;
+    const uint8_t col = i % 3;
+    const uint8_t row = i / 3;
     lv_obj_set_grid_cell(cell, LV_GRID_ALIGN_CENTER, col, 1, LV_GRID_ALIGN_CENTER, row, 1);
     register_tap_target(cell);
     g_heatCells[i] = cell;

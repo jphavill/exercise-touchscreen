@@ -12,7 +12,7 @@
 #include <lvgl.h>
 
 #include <esp_display_panel.hpp>
-#include "lvgl_v8_port.h"
+#include "lvgl_port.h"
 
 #include "config.h"
 #include "models.h"
@@ -32,9 +32,9 @@ static PullupDashboardData g_lastShownData = {};
 static bool g_hasLastShownData = false;
 static constexpr uint32_t RGB_PCLK_HZ_SAFE = 8 * 1000 * 1000;
 static constexpr uint32_t RGB_BOUNCE_LINES = 30;
+static const char* TAG = "app";
 
 static void refresh_from_api();
-static const char* TAG = "app";
 
 static uint32_t uptime_ms() {
   return static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
@@ -78,6 +78,13 @@ static bool init_display_and_touch() {
     return false;
   }
 
+  const int frameWidth = lcd->getFrameWidth();
+  const int frameHeight = lcd->getFrameHeight();
+  if (frameWidth <= 0 || frameWidth > 65535 || frameHeight <= 0 || frameHeight > 65535) {
+    ESP_LOGE(TAG, "Invalid frame size: %dx%d", frameWidth, frameHeight);
+    return false;
+  }
+
   auto lcd_bus = lcd->getBus();
   if (lcd_bus && lcd_bus->getBasicAttributes().type == ESP_PANEL_BUS_TYPE_RGB) {
     auto rgb_bus = static_cast<esp_panel::drivers::BusRGB*>(lcd_bus);
@@ -85,15 +92,25 @@ static bool init_display_and_touch() {
     rgb_bus->configRGB_BounceBufferSize(lcd->getFrameWidth() * RGB_BOUNCE_LINES);
   }
 
-#if LVGL_PORT_AVOID_TEARING_MODE
-  lcd->configFrameBufferNumber(LVGL_PORT_DISP_BUFFER_NUM);
-#endif
+  const uint8_t frameBufferCount = lvgl_port_get_required_frame_buffer_count();
+  lcd->configFrameBufferNumber(frameBufferCount);
+  ESP_LOGI(TAG, "Configured RGB frame buffers: %u", static_cast<unsigned>(frameBufferCount));
 
   if (!g_board->begin()) {
     return false;
   }
 
-  lvgl_port_init(g_board->getLCD(), g_board->getTouch());
+  auto touch = g_board->getTouch();
+  auto basicSpec = lcd->getBasicAttributes().basic_bus_spec;
+  void* touchHandle = touch ? static_cast<void*>(touch->getPanelHandle()) : nullptr;
+
+  if (!lvgl_port_init(static_cast<void*>(lcd->getRefreshPanelHandle()), touchHandle,
+                      static_cast<uint16_t>(frameWidth), static_cast<uint16_t>(frameHeight),
+                      basicSpec.x_coord_align, basicSpec.y_coord_align)) {
+    ESP_LOGE(TAG, "LVGL adapter initialization failed");
+    return false;
+  }
+
   return true;
 }
 

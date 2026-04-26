@@ -4,7 +4,7 @@ This project now targets native ESP-IDF (no Arduino runtime).
 
 ## Supported ESP-IDF version
 
-- Use ESP-IDF `v5.4.x` (recommended)
+- Use ESP-IDF `v5.5.x` (recommended)
 
 ## Prerequisites
 
