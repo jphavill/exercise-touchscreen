@@ -9,10 +9,6 @@
 #include "sdkconfig.h"
 #endif
 
-#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO)
-#include <Arduino.h>
-#endif
-
 #include "esp_display_panel.hpp"
 
 #ifndef LV_CONF_INCLUDE_SIMPLE
@@ -21,25 +17,25 @@
 
 #include "lvgl.h"
 
-#define LVGL_PORT_TICK_PERIOD_MS                (2)
+#define LVGL_PORT_TICK_PERIOD_MS                (5)
 
-#define LVGL_PORT_BUFFER_MALLOC_CAPS            (MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
+#define LVGL_PORT_BUFFER_MALLOC_CAPS            (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
 #define LVGL_PORT_BUFFER_SIZE_HEIGHT            (20)
 #define LVGL_PORT_BUFFER_NUM                    (2)
 
 #define LVGL_PORT_TASK_MAX_DELAY_MS             (500)
-#define LVGL_PORT_TASK_MIN_DELAY_MS             (2)
+#define LVGL_PORT_TASK_MIN_DELAY_MS             (5)
 #define LVGL_PORT_TASK_STACK_SIZE               (6 * 1024)
 #define LVGL_PORT_TASK_PRIORITY                 (2)
 
-#ifdef ARDUINO_RUNNING_CORE
-#define LVGL_PORT_TASK_CORE                     (ARDUINO_RUNNING_CORE)
-#else
+#if CONFIG_FREERTOS_UNICORE
 #define LVGL_PORT_TASK_CORE                     (0)
+#else
+#define LVGL_PORT_TASK_CORE                     (1)
 #endif
 
 #ifndef LVGL_PORT_AVOID_TEARING_MODE
-#define LVGL_PORT_AVOID_TEARING_MODE            (2)
+#define LVGL_PORT_AVOID_TEARING_MODE            (3)
 #endif
 
 #ifndef LVGL_PORT_ROTATION_DEGREE

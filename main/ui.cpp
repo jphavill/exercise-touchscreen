@@ -1,6 +1,6 @@
 #include "ui.h"
 
-#include <Arduino.h>
+#include <cstdio>
 #include <cstring>
 
 #ifndef LV_CONF_INCLUDE_SIMPLE
@@ -67,24 +67,17 @@ static lv_coord_t kHeatRows[] = {LV_GRID_CONTENT, LV_GRID_CONTENT, LV_GRID_CONTE
                                  LV_GRID_TEMPLATE_LAST};
 
 static lv_color_t heat_color(uint8_t level) {
-  if (level == 0) {
-    return lv_color_hex(0xFFFFFF);
-  }
-  return lv_color_hex(0x78C7FF);
-}
-
-static lv_opa_t heat_opa(uint8_t level) {
   switch (level) {
     case 0:
-      return static_cast<lv_opa_t>(15);   // ~6%
+      return lv_color_hex(0x0F0F0F);
     case 1:
-      return static_cast<lv_opa_t>(56);   // ~22%
+      return lv_color_hex(0x1A2C38);
     case 2:
-      return static_cast<lv_opa_t>(115);  // ~45%
+      return lv_color_hex(0x365A73);
     case 3:
-      return static_cast<lv_opa_t>(173);  // ~68%
+      return lv_color_hex(0x5187AD);
     default:
-      return static_cast<lv_opa_t>(235);  // ~92%
+      return lv_color_hex(0x6EB8EA);
   }
 }
 
@@ -203,8 +196,8 @@ void ui_init() {
     lv_obj_set_size(cell, kHeatCellSize, kHeatCellSize);
     lv_obj_set_style_radius(cell, 6, 0);
     lv_obj_set_style_border_width(cell, 0, 0);
-    lv_obj_set_style_bg_color(cell, lv_color_hex(0x78C7FF), 0);
-    lv_obj_set_style_bg_opa(cell, heat_opa(0), 0);
+    lv_obj_set_style_bg_color(cell, heat_color(0), 0);
+    lv_obj_set_style_bg_opa(cell, LV_OPA_COVER, 0);
 
     const uint8_t col = i % 5;
     const uint8_t row = i / 5;
@@ -314,7 +307,6 @@ void ui_set_heatmap(const DayEntry days[30]) {
       continue;
     }
     lv_obj_set_style_bg_color(g_heatCells[i], heat_color(level), 0);
-    lv_obj_set_style_bg_opa(g_heatCells[i], heat_opa(level), 0);
     g_lastHeatLevels[i] = level;
   }
 

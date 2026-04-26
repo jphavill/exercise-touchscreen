@@ -1,17 +1,17 @@
 #pragma once
 
-#include <Arduino.h>
-#include "secrets.h"
+#include <cstdint>
+#include "sdkconfig.h"
 
 // Network/API constants
-constexpr char WIFI_SSID[] = SECRET_WIFI_SSID;
-constexpr char WIFI_PASSWORD[] = SECRET_WIFI_PASSWORD;
-constexpr char API_URL[] = "http://192.168.1.208:8003/api/widgets/pullups";
-const uint32_t API_REFRESH_MS = 60000;
+constexpr char WIFI_SSID[] = CONFIG_EXERCISE_WIFI_SSID;
+constexpr char WIFI_PASSWORD[] = CONFIG_EXERCISE_WIFI_PASSWORD;
+constexpr char API_URL[] = CONFIG_EXERCISE_API_URL;
+constexpr char API_TIMEZONE[] = CONFIG_EXERCISE_API_TIMEZONE;
+const uint32_t API_REFRESH_MS = CONFIG_EXERCISE_API_REFRESH_MS;
 
 // Wi-Fi connect behavior
 const uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;
-const uint16_t WIFI_RETRY_DELAY_MS = 250;
 
 // Inactivity/backlight behavior
 const uint32_t BACKLIGHT_DIM_TIMEOUT_MS = 45000;

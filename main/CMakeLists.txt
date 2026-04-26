@@ -1,0 +1,11 @@
+idf_component_register(
+    SRCS
+        "main.cpp"
+        "ui.cpp"
+        "wifi_api.cpp"
+        "power.cpp"
+        "presence.cpp"
+        "lvgl_v8_port.cpp"
+    INCLUDE_DIRS
+        "."
+)

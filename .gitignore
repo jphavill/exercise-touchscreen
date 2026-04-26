@@ -1,1 +1,8 @@
 secrets.h
+
+# ESP-IDF build artifacts
+build/
+sdkconfig
+sdkconfig.old
+.idf/
+managed_components/

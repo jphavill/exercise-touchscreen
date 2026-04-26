@@ -7,6 +7,7 @@
 #include "esp_timer.h"
 #include <assert.h>
 #include <limits.h>
+#include <stdlib.h>
 #undef ESP_UTILS_LOG_TAG
 #define ESP_UTILS_LOG_TAG "LvPort"
 #include "esp_lib_utils.h"
@@ -14,7 +15,7 @@
 
 using namespace esp_panel::drivers;
 
-#define LVGL_PORT_ENABLE_ROTATION_OPTIMIZED     (0)
+#define LVGL_PORT_ENABLE_ROTATION_OPTIMIZED     (1)
 #define LVGL_PORT_BUFFER_NUM_MAX                (2)
 
 static SemaphoreHandle_t lvgl_mux = nullptr;
@@ -514,7 +515,17 @@ static lv_disp_t *display_init(LCD *lcd)
     buffer_size = lcd_width * LVGL_PORT_BUFFER_SIZE_HEIGHT;
     for (int i = 0; (i < LVGL_PORT_BUFFER_NUM) && (i < LVGL_PORT_BUFFER_NUM_MAX); i++) {
         lvgl_buf[i] = heap_caps_malloc(buffer_size * sizeof(lv_color_t), LVGL_PORT_BUFFER_MALLOC_CAPS);
-        assert(lvgl_buf[i]);
+        if (lvgl_buf[i] == nullptr) {
+            lvgl_buf[i] = heap_caps_malloc(buffer_size * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        }
+        if (lvgl_buf[i] == nullptr) {
+            ESP_UTILS_LOGE("Alloc LVGL buffer[%d] failed, size=%d", i, buffer_size * (int)sizeof(lv_color_t));
+            for (int j = 0; j < i; j++) {
+                free(lvgl_buf[j]);
+                lvgl_buf[j] = nullptr;
+            }
+            return nullptr;
+        }
         ESP_UTILS_LOGD("Buffer[%d] address: %p, size: %d", i, lvgl_buf[i], buffer_size * sizeof(lv_color_t));
     }
 #else

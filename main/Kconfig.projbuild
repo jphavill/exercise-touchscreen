@@ -1,0 +1,24 @@
+menu "Exercise Touchscreen"
+
+config EXERCISE_WIFI_SSID
+    string "Wi-Fi SSID"
+    default ""
+
+config EXERCISE_WIFI_PASSWORD
+    string "Wi-Fi password"
+    default ""
+
+config EXERCISE_API_URL
+    string "Dashboard API URL"
+    default "http://192.168.1.208:8003/api/widgets/pullups"
+
+config EXERCISE_API_TIMEZONE
+    string "API timezone header"
+    default "America/Halifax"
+
+config EXERCISE_API_REFRESH_MS
+    int "API refresh interval (ms)"
+    range 1000 3600000
+    default 60000
+
+endmenu
