@@ -10,7 +10,6 @@
 enum class BacklightState : uint8_t {
   Unknown,
   Off,
-  Dim,
   On
 };
 
@@ -60,10 +59,6 @@ void power_init() {
 
 void backlight_on() {
   set_backlight(BACKLIGHT_LEVEL_ON, BacklightState::On);
-}
-
-void backlight_dim() {
-  set_backlight(BACKLIGHT_LEVEL_DIM, BacklightState::Dim);
 }
 
 void backlight_off() {

@@ -226,6 +226,21 @@ void ui_init() {
   lv_obj_set_style_text_color(offlineTitle, lv_color_hex(0xF2F7FF), 0);
   lv_obj_set_style_text_font(offlineTitle, UI_FONT_OFFLINE_TITLE, 0);
 
+  lv_obj_t* offlineRefreshBtn = lv_btn_create(g_offlineContainer);
+  lv_obj_set_size(offlineRefreshBtn, 160, 54);
+  lv_obj_set_style_bg_color(offlineRefreshBtn, lv_color_hex(0x78C7FF), 0);
+  lv_obj_set_style_bg_opa(offlineRefreshBtn, LV_OPA_70, 0);
+  lv_obj_set_style_radius(offlineRefreshBtn, 12, 0);
+  lv_obj_set_style_border_width(offlineRefreshBtn, 0, 0);
+  lv_obj_add_event_cb(offlineRefreshBtn, on_refresh_btn, LV_EVENT_CLICKED, nullptr);
+  register_tap_target(offlineRefreshBtn);
+
+  lv_obj_t* offlineRefreshLabel = lv_label_create(offlineRefreshBtn);
+  lv_label_set_text(offlineRefreshLabel, "Refresh");
+  lv_obj_set_style_text_color(offlineRefreshLabel, lv_color_hex(0x041017), 0);
+  lv_obj_set_style_text_font(offlineRefreshLabel, UI_FONT_BUTTON, 0);
+  lv_obj_center(offlineRefreshLabel);
+
   lv_obj_t* offlineSub = lv_label_create(g_offlineContainer);
   lv_label_set_text(offlineSub, "Unable to reach API");
   lv_obj_set_style_text_color(offlineSub, lv_color_hex(0xB9C8D8), 0);

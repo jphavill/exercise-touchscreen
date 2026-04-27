@@ -170,10 +170,6 @@ void loop() {
       g_displaySleeping = true;
       g_wakeRepaintPasses = 0;
     }
-  } else if (inactiveMs >= BACKLIGHT_DIM_TIMEOUT_MS) {
-    if (!g_displaySleeping) {
-      backlight_dim();
-    }
   }
 
   if ((now - g_lastApiFetchMs) >= API_REFRESH_MS) {
