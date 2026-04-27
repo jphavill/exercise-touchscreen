@@ -22,8 +22,43 @@ static uint32_t g_lastApiFetchMs = 0;
 static uint32_t g_lastInteractionMs = 0;
 static Board* g_board = nullptr;
 static bool g_displayReady = false;
+static bool g_displaySleeping = false;
 
 static void refresh_from_api();
+
+static void set_lcd_display_enabled(bool enabled) {
+  if (!g_displayReady || g_board == nullptr) {
+    return;
+  }
+
+  auto lcd = g_board->getLCD();
+  if (lcd == nullptr) {
+    return;
+  }
+
+  if (!lcd->isFunctionSupported(esp_panel::drivers::LCD::BasicBusSpecification::FUNC_DISPLAY_ON_OFF)) {
+    return;
+  }
+
+  if (!lcd->setDisplayOnOff(enabled)) {
+    Serial.println(enabled ? "[LCD] failed to enable display" : "[LCD] failed to disable display");
+  }
+}
+
+static void wake_display_if_needed() {
+  if (!g_displaySleeping) {
+    return;
+  }
+
+  if (lvgl_port_lock(-1)) {
+    set_lcd_display_enabled(true);
+    lv_obj_invalidate(lv_scr_act());
+    lv_refr_now(lv_disp_get_default());
+    lvgl_port_unlock();
+  }
+
+  g_displaySleeping = false;
+}
 
 static bool init_display_and_touch() {
   Serial.println("[BOOT] init_display_and_touch: start");
@@ -58,6 +93,7 @@ static bool init_display_and_touch() {
 
 static void mark_activity_and_wake() {
   g_lastInteractionMs = millis();
+  wake_display_if_needed();
   backlight_on();
 }
 
@@ -144,9 +180,18 @@ void loop() {
 
   const uint32_t inactiveMs = now - g_lastInteractionMs;
   if (inactiveMs >= BACKLIGHT_OFF_TIMEOUT_MS) {
-    backlight_off();
+    if (!g_displaySleeping) {
+      if (lvgl_port_lock(-1)) {
+        set_lcd_display_enabled(false);
+        lvgl_port_unlock();
+      }
+      backlight_off();
+      g_displaySleeping = true;
+    }
   } else if (inactiveMs >= BACKLIGHT_DIM_TIMEOUT_MS) {
-    backlight_dim();
+    if (!g_displaySleeping) {
+      backlight_dim();
+    }
   }
 
   if ((now - g_lastApiFetchMs) >= API_REFRESH_MS) {

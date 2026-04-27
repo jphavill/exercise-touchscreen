@@ -8,12 +8,13 @@
 #include "config.h"
 
 enum class BacklightState : uint8_t {
+  Unknown,
   Off,
   Dim,
   On
 };
 
-static BacklightState g_state = BacklightState::Off;
+static BacklightState g_state = BacklightState::Unknown;
 static bool g_pwmReady = false;
 
 #if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
@@ -53,7 +54,7 @@ void power_init() {
   } else {
     Serial.println("[BOOT] Backlight PWM initialized");
   }
-  g_state = BacklightState::Off;
+  g_state = BacklightState::Unknown;
   set_backlight(BACKLIGHT_LEVEL_OFF, BacklightState::Off);
 }
 
