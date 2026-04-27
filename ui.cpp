@@ -49,6 +49,7 @@ static lv_obj_t* g_offlineContainer = nullptr;
 static lv_obj_t* g_todayLabel = nullptr;
 static lv_obj_t* g_goalLabel = nullptr;
 static lv_obj_t* g_yearLabel = nullptr;
+static lv_obj_t* g_refreshBtn = nullptr;
 static lv_obj_t* g_heatCells[30] = {nullptr};
 
 static ui_action_callback_t g_refreshCallback = nullptr;
@@ -159,16 +160,18 @@ void ui_init() {
   lv_obj_set_style_text_color(g_yearLabel, lv_color_hex(0xB9C8D8), 0);
   lv_obj_set_style_text_font(g_yearLabel, UI_FONT_META, 0);
 
-  lv_obj_t* refreshBtn = lv_btn_create(metricsCol);
-  lv_obj_set_size(refreshBtn, 160, 54);
-  lv_obj_set_style_bg_color(refreshBtn, lv_color_hex(0x78C7FF), 0);
-  lv_obj_set_style_bg_opa(refreshBtn, LV_OPA_70, 0);
-  lv_obj_set_style_radius(refreshBtn, 12, 0);
-  lv_obj_set_style_border_width(refreshBtn, 0, 0);
-  lv_obj_add_event_cb(refreshBtn, on_refresh_btn, LV_EVENT_CLICKED, nullptr);
-  register_tap_target(refreshBtn);
+  g_refreshBtn = lv_btn_create(scr);
+  lv_obj_set_size(g_refreshBtn, 160, 54);
+  lv_obj_set_style_bg_color(g_refreshBtn, lv_color_hex(0x78C7FF), 0);
+  lv_obj_set_style_bg_opa(g_refreshBtn, LV_OPA_70, 0);
+  lv_obj_set_style_radius(g_refreshBtn, 12, 0);
+  lv_obj_set_style_border_width(g_refreshBtn, 0, 0);
+  lv_obj_add_event_cb(g_refreshBtn, on_refresh_btn, LV_EVENT_CLICKED, nullptr);
+  lv_obj_add_flag(g_refreshBtn, LV_OBJ_FLAG_FLOATING);
+  lv_obj_align(g_refreshBtn, LV_ALIGN_TOP_RIGHT, -10, 10);
+  register_tap_target(g_refreshBtn);
 
-  lv_obj_t* refreshLabel = lv_label_create(refreshBtn);
+  lv_obj_t* refreshLabel = lv_label_create(g_refreshBtn);
   lv_label_set_text(refreshLabel, "Refresh");
   lv_obj_set_style_text_color(refreshLabel, lv_color_hex(0x041017), 0);
   lv_obj_set_style_text_font(refreshLabel, UI_FONT_BUTTON, 0);
@@ -232,19 +235,21 @@ void ui_init() {
 }
 
 void ui_show_dashboard() {
-  if (g_dashboardContainer == nullptr || g_offlineContainer == nullptr) {
+  if (g_dashboardContainer == nullptr || g_offlineContainer == nullptr || g_refreshBtn == nullptr) {
     return;
   }
   lv_obj_clear_flag(g_dashboardContainer, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(g_offlineContainer, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_clear_flag(g_refreshBtn, LV_OBJ_FLAG_HIDDEN);
 }
 
 void ui_show_offline() {
-  if (g_dashboardContainer == nullptr || g_offlineContainer == nullptr) {
+  if (g_dashboardContainer == nullptr || g_offlineContainer == nullptr || g_refreshBtn == nullptr) {
     return;
   }
   lv_obj_add_flag(g_dashboardContainer, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(g_offlineContainer, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(g_refreshBtn, LV_OBJ_FLAG_HIDDEN);
 }
 
 void ui_set_today(uint16_t todayCount) {
