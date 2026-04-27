@@ -54,10 +54,16 @@ static lv_obj_t* g_heatCells[30] = {nullptr};
 static ui_action_callback_t g_refreshCallback = nullptr;
 static ui_action_callback_t g_tapWakeCallback = nullptr;
 
-static lv_coord_t kHeatCols[] = {LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_FR(1),
-                                 LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_FR(1),
-                                 LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST};
-static lv_coord_t kHeatRows[] = {LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST};
+static constexpr lv_coord_t kHeatCellSize = 46;
+static constexpr lv_coord_t kHeatGridGap = 10;
+static constexpr lv_coord_t kHeatWrapPad = 8;
+static constexpr uint8_t kHeatColCount = 10;
+static constexpr uint8_t kHeatRowCount = 3;
+
+static lv_coord_t kHeatCols[] = {kHeatCellSize, kHeatCellSize, kHeatCellSize, kHeatCellSize,
+                                 kHeatCellSize, kHeatCellSize, kHeatCellSize, kHeatCellSize,
+                                 kHeatCellSize, kHeatCellSize, LV_GRID_TEMPLATE_LAST};
+static lv_coord_t kHeatRows[] = {kHeatCellSize, kHeatCellSize, kHeatCellSize, LV_GRID_TEMPLATE_LAST};
 
 static lv_color_t heat_color(uint8_t level) {
   if (level == 0) {
@@ -129,7 +135,7 @@ void ui_init() {
   lv_obj_set_size(metricsCol, LV_PCT(44), LV_PCT(100));
   lv_obj_set_layout(metricsCol, LV_LAYOUT_FLEX);
   lv_obj_set_flex_flow(metricsCol, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(metricsCol, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+  lv_obj_set_flex_align(metricsCol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
   lv_obj_set_style_pad_row(metricsCol, 12, 0);
   register_tap_target(metricsCol);
 
@@ -170,19 +176,24 @@ void ui_init() {
 
   lv_obj_t* heatmapWrap = lv_obj_create(g_dashboardContainer);
   lv_obj_remove_style_all(heatmapWrap);
-  lv_obj_set_size(heatmapWrap, LV_PCT(52), LV_PCT(76));
-  lv_obj_set_style_pad_all(heatmapWrap, 8, 0);
+  lv_obj_set_size(
+      heatmapWrap,
+      static_cast<lv_coord_t>(kHeatColCount * kHeatCellSize + (kHeatColCount - 1) * kHeatGridGap +
+                              2 * kHeatWrapPad),
+      static_cast<lv_coord_t>(kHeatRowCount * kHeatCellSize + (kHeatRowCount - 1) * kHeatGridGap +
+                              2 * kHeatWrapPad));
+  lv_obj_set_style_pad_all(heatmapWrap, kHeatWrapPad, 0);
   lv_obj_set_layout(heatmapWrap, LV_LAYOUT_GRID);
   lv_obj_set_style_grid_column_dsc_array(heatmapWrap, kHeatCols, 0);
   lv_obj_set_style_grid_row_dsc_array(heatmapWrap, kHeatRows, 0);
-  lv_obj_set_style_pad_row(heatmapWrap, 10, 0);
-  lv_obj_set_style_pad_column(heatmapWrap, 10, 0);
+  lv_obj_set_style_pad_row(heatmapWrap, kHeatGridGap, 0);
+  lv_obj_set_style_pad_column(heatmapWrap, kHeatGridGap, 0);
   register_tap_target(heatmapWrap);
 
   for (uint8_t i = 0; i < 30; i++) {
     lv_obj_t* cell = lv_obj_create(heatmapWrap);
     lv_obj_remove_style_all(cell);
-    lv_obj_set_size(cell, 46, 46);
+    lv_obj_set_size(cell, kHeatCellSize, kHeatCellSize);
     lv_obj_set_style_radius(cell, 6, 0);
     lv_obj_set_style_border_width(cell, 0, 0);
     lv_obj_set_style_bg_color(cell, lv_color_hex(0x78C7FF), 0);
