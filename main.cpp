@@ -10,6 +10,7 @@
 #include "lvgl_v8_port.h"
 
 #include "config.h"
+#include "display_power_controller.h"
 #include "models.h"
 #include "power.h"
 #include "presence.h"
@@ -18,23 +19,16 @@
 
 using namespace esp_panel::board;
 
-static uint32_t g_lastApiFetchMs = 0;
-static uint32_t g_lastInteractionMs = 0;
+struct RuntimeState {
+  uint32_t lastApiFetchMs;
+  DisplayPowerController displayPower;
+};
+
+static RuntimeState g_runtime = {};
 static Board* g_board = nullptr;
 static bool g_displayReady = false;
-static bool g_displaySleeping = false;
-static uint8_t g_wakeRepaintPasses = 0;
 
 static void refresh_from_api();
-
-static void wake_display_if_needed() {
-  if (!g_displaySleeping) {
-    return;
-  }
-
-  g_displaySleeping = false;
-  g_wakeRepaintPasses = 2;
-}
 
 static bool init_display_and_touch() {
   Serial.println("[BOOT] init_display_and_touch: start");
@@ -68,9 +62,7 @@ static bool init_display_and_touch() {
 }
 
 static void mark_activity_and_wake() {
-  g_lastInteractionMs = millis();
-  wake_display_if_needed();
-  backlight_on();
+  display_power_mark_activity(g_runtime.displayPower);
 }
 
 static void on_refresh_button() {
@@ -91,10 +83,7 @@ static void refresh_from_api() {
   }
 
   if (apiOk) {
-    ui_set_today(data.days[29].count);
-    ui_set_goal(data.dailyGoal);
-    ui_set_year(data.yearTotal);
-    ui_set_heatmap(data.days);
+    ui_set_all(data);
     ui_show_dashboard();
   } else {
     ui_show_offline();
@@ -118,6 +107,8 @@ void setup() {
     return;
   }
 
+  display_power_init(g_runtime.displayPower);
+
   if (lvgl_port_lock(-1)) {
     ui_init();
     lvgl_port_unlock();
@@ -138,7 +129,7 @@ void setup() {
     refresh_from_api();
   }
 
-  g_lastApiFetchMs = millis();
+  g_runtime.lastApiFetchMs = millis();
   Serial.println("[BOOT] setup done");
 }
 
@@ -154,26 +145,11 @@ void loop() {
     mark_activity_and_wake();
   }
 
-  if (g_wakeRepaintPasses > 0) {
-    if (lvgl_port_lock(-1)) {
-      lv_obj_invalidate(lv_scr_act());
-      lv_refr_now(lv_disp_get_default());
-      lvgl_port_unlock();
-      g_wakeRepaintPasses--;
-    }
-  }
+  display_power_repaint_after_wake(g_runtime.displayPower);
+  display_power_handle_inactivity(g_runtime.displayPower, now, BACKLIGHT_OFF_TIMEOUT_MS);
 
-  const uint32_t inactiveMs = now - g_lastInteractionMs;
-  if (inactiveMs >= BACKLIGHT_OFF_TIMEOUT_MS) {
-    if (!g_displaySleeping) {
-      backlight_off();
-      g_displaySleeping = true;
-      g_wakeRepaintPasses = 0;
-    }
-  }
-
-  if ((now - g_lastApiFetchMs) >= API_REFRESH_MS) {
-    g_lastApiFetchMs = now;
+  if ((now - g_runtime.lastApiFetchMs) >= API_REFRESH_MS) {
+    g_runtime.lastApiFetchMs = now;
     refresh_from_api();
   }
 

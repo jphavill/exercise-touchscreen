@@ -4,14 +4,48 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
-#include <cstring>
 
 #include "config.h"
+
+static constexpr size_t kDashboardJsonDocCapacity = 16384;
+
+template <typename T>
+static bool parse_required_number(JsonVariantConst root, const char* key, T& outValue) {
+  JsonVariantConst field = root[key];
+  if (!field.is<T>()) {
+    Serial.print("[API] Missing or invalid ");
+    Serial.println(key);
+    return false;
+  }
+
+  outValue = field.as<T>();
+  return true;
+}
+
+static bool parse_day_entry(JsonVariantConst dayValue, DayEntry& outDay, size_t index) {
+  JsonObjectConst day = dayValue.as<JsonObjectConst>();
+  if (day.isNull()) {
+    Serial.print("[API] Invalid day entry object at index ");
+    Serial.println(static_cast<int>(index));
+    return false;
+  }
+
+  if (!day["count"].is<uint16_t>() || !day["heat_level"].is<uint8_t>()) {
+    Serial.print("[API] Invalid day entry fields at index ");
+    Serial.println(static_cast<int>(index));
+    return false;
+  }
+
+  outDay.count = day["count"].as<uint16_t>();
+  outDay.heatLevel = day["heat_level"].as<uint8_t>();
+  return true;
+}
 
 static bool parse_payload(const String& payload, PullupDashboardData& outData) {
   outData.valid = false;
 
-  DynamicJsonDocument doc(16384);
+  // Sized for the current payload shape: 30 day entries plus metadata.
+  DynamicJsonDocument doc(kDashboardJsonDocCapacity);
   DeserializationError err = deserializeJson(doc, payload);
   if (err) {
     Serial.print("[API] JSON parse error: ");
@@ -19,8 +53,8 @@ static bool parse_payload(const String& payload, PullupDashboardData& outData) {
     return false;
   }
 
-  if (!doc["year_total"].is<uint32_t>() || !doc["daily_goal"].is<uint16_t>()) {
-    Serial.println("[API] Missing or invalid year_total/daily_goal");
+  if (!parse_required_number<uint32_t>(doc.as<JsonVariantConst>(), "year_total", outData.yearTotal) ||
+      !parse_required_number<uint16_t>(doc.as<JsonVariantConst>(), "daily_goal", outData.dailyGoal)) {
     return false;
   }
 
@@ -31,23 +65,10 @@ static bool parse_payload(const String& payload, PullupDashboardData& outData) {
     return false;
   }
 
-  outData.yearTotal = doc["year_total"].as<uint32_t>();
-  outData.dailyGoal = doc["daily_goal"].as<uint16_t>();
-
   for (size_t i = 0; i < 30; i++) {
-    JsonObject day = last30[i].as<JsonObject>();
-    if (day.isNull() || !day["date"].is<const char*>() || !day["count"].is<uint16_t>() ||
-        !day["heat_level"].is<uint8_t>()) {
-      Serial.print("[API] Invalid day entry at index ");
-      Serial.println(static_cast<int>(i));
+    if (!parse_day_entry(last30[i].as<JsonVariantConst>(), outData.days[i], i)) {
       return false;
     }
-
-    const char* date = day["date"].as<const char*>();
-    strncpy(outData.days[i].date, date, sizeof(outData.days[i].date) - 1);
-    outData.days[i].date[sizeof(outData.days[i].date) - 1] = '\0';
-    outData.days[i].count = day["count"].as<uint16_t>();
-    outData.days[i].heatLevel = day["heat_level"].as<uint8_t>();
   }
 
   outData.valid = true;

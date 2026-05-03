@@ -3,7 +3,6 @@
 #include <Arduino.h>
 
 struct DayEntry {
-  char date[11];
   uint16_t count;
   uint8_t heatLevel;
 };

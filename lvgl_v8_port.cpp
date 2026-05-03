@@ -21,8 +21,6 @@ static TaskHandle_t lvgl_task_handle = nullptr;
 static esp_timer_handle_t lvgl_tick_timer = NULL;
 static void *lvgl_buf[LVGL_PORT_BUFFER_NUM_MAX] = {};
 
-#if LVGL_PORT_AVOID_TEAR
-#if LVGL_PORT_DIRECT_MODE
 static void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
 {
     LCD *lcd = (LCD *)drv->user_data;
@@ -37,108 +35,13 @@ static void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t
     lv_disp_flush_ready(drv);
 }
 
-#elif LVGL_PORT_FULL_REFRESH && LVGL_PORT_DISP_BUFFER_NUM == 2
-
-static void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
-{
-    LCD *lcd = (LCD *)drv->user_data;
-
-    lcd->switchFrameBufferTo(color_map);
-
-    ulTaskNotifyValueClear(NULL, ULONG_MAX);
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-    lv_disp_flush_ready(drv);
-}
-
-#elif LVGL_PORT_FULL_REFRESH && LVGL_PORT_DISP_BUFFER_NUM == 3
-
-static void *lvgl_port_lcd_last_buf = NULL;
-static void *lvgl_port_lcd_next_buf = NULL;
-static void *lvgl_port_flush_next_buf = NULL;
-
-void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
-{
-    LCD *lcd = (LCD *)drv->user_data;
-
-    drv->draw_buf->buf1 = color_map;
-    drv->draw_buf->buf2 = lvgl_port_flush_next_buf;
-    lvgl_port_flush_next_buf = color_map;
-
-    lcd->switchFrameBufferTo(color_map);
-
-    lvgl_port_lcd_next_buf = color_map;
-
-    lv_disp_flush_ready(drv);
-}
-#endif
-
 IRAM_ATTR bool onLcdVsyncCallback(void *user_data)
 {
     BaseType_t need_yield = pdFALSE;
-#if LVGL_PORT_FULL_REFRESH && (LVGL_PORT_DISP_BUFFER_NUM == 3)
-    if (lvgl_port_lcd_next_buf != lvgl_port_lcd_last_buf) {
-        lvgl_port_flush_next_buf = lvgl_port_lcd_last_buf;
-        lvgl_port_lcd_last_buf = lvgl_port_lcd_next_buf;
-    }
-#else
     TaskHandle_t task_handle = (TaskHandle_t)user_data;
     xTaskNotifyFromISR(task_handle, ULONG_MAX, eNoAction, &need_yield);
-#endif
     return (need_yield == pdTRUE);
 }
-
-#else
-
-void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
-{
-    LCD *lcd = (LCD *)drv->user_data;
-    const int offsetx1 = area->x1;
-    const int offsetx2 = area->x2;
-    const int offsety1 = area->y1;
-    const int offsety2 = area->y2;
-
-    lcd->drawBitmap(offsetx1, offsety1, offsetx2 - offsetx1 + 1, offsety2 - offsety1 + 1, (const uint8_t *)color_map);
-    if (lcd->getBus()->getBasicAttributes().type == ESP_PANEL_BUS_TYPE_RGB) {
-        lv_disp_flush_ready(drv);
-    }
-}
-
-static void update_callback(lv_disp_drv_t *drv)
-{
-    LCD *lcd = (LCD *)drv->user_data;
-    auto transformation = lcd->getTransformation();
-    static bool disp_init_mirror_x = transformation.mirror_x;
-    static bool disp_init_mirror_y = transformation.mirror_y;
-    static bool disp_init_swap_xy = transformation.swap_xy;
-
-    switch (drv->rotated) {
-    case LV_DISP_ROT_NONE:
-        lcd->swapXY(disp_init_swap_xy);
-        lcd->mirrorX(disp_init_mirror_x);
-        lcd->mirrorY(disp_init_mirror_y);
-        break;
-    case LV_DISP_ROT_90:
-        lcd->swapXY(!disp_init_swap_xy);
-        lcd->mirrorX(disp_init_mirror_x);
-        lcd->mirrorY(!disp_init_mirror_y);
-        break;
-    case LV_DISP_ROT_180:
-        lcd->swapXY(disp_init_swap_xy);
-        lcd->mirrorX(!disp_init_mirror_x);
-        lcd->mirrorY(!disp_init_mirror_y);
-        break;
-    case LV_DISP_ROT_270:
-        lcd->swapXY(!disp_init_swap_xy);
-        lcd->mirrorX(!disp_init_mirror_x);
-        lcd->mirrorY(disp_init_mirror_y);
-        break;
-    }
-
-    ESP_UTILS_LOGD("Update display rotation to %d", drv->rotated);
-}
-
-#endif
 
 void rounder_callback(lv_disp_drv_t *drv, lv_area_t *area)
 {
@@ -170,27 +73,11 @@ static lv_disp_t *display_init(LCD *lcd)
     int buffer_size = 0;
 
     ESP_UTILS_LOGD("Malloc memory for LVGL buffer");
-#if !LVGL_PORT_AVOID_TEAR
-    buffer_size = lcd_width * LVGL_PORT_BUFFER_SIZE_HEIGHT;
-    for (int i = 0; (i < LVGL_PORT_BUFFER_NUM) && (i < LVGL_PORT_BUFFER_NUM_MAX); i++) {
-        lvgl_buf[i] = heap_caps_malloc(buffer_size * sizeof(lv_color_t), LVGL_PORT_BUFFER_MALLOC_CAPS);
-        assert(lvgl_buf[i]);
-        ESP_UTILS_LOGD("Buffer[%d] address: %p, size: %d", i, lvgl_buf[i], buffer_size * sizeof(lv_color_t));
-    }
-#else
     buffer_size = lcd_width * lcd_height;
-#if (LVGL_PORT_DISP_BUFFER_NUM >= 3) && LVGL_PORT_FULL_REFRESH
-    lvgl_port_lcd_last_buf = lcd->getFrameBufferByIndex(0);
-    lvgl_buf[0] = lcd->getFrameBufferByIndex(1);
-    lvgl_buf[1] = lcd->getFrameBufferByIndex(2);
-    lvgl_port_lcd_next_buf = lvgl_port_lcd_last_buf;
-    lvgl_port_flush_next_buf = lvgl_buf[1];
-#elif LVGL_PORT_DISP_BUFFER_NUM >= 2
+
     for (int i = 0; (i < LVGL_PORT_DISP_BUFFER_NUM) && (i < LVGL_PORT_BUFFER_NUM_MAX); i++) {
         lvgl_buf[i] = lcd->getFrameBufferByIndex(i);
     }
-#endif
-#endif
 
     lv_disp_draw_buf_init(&disp_buf, lvgl_buf[0], lvgl_buf[1], buffer_size);
 
@@ -205,14 +92,6 @@ static lv_disp_t *display_init(LCD *lcd)
 #elif LVGL_PORT_DIRECT_MODE
     disp_drv.direct_mode = 1;
 #endif
-#else
-    if (lcd->getBasicAttributes().basic_bus_spec.isFunctionValid(LCD::BasicBusSpecification::FUNC_SWAP_XY) &&
-            lcd->getBasicAttributes().basic_bus_spec.isFunctionValid(LCD::BasicBusSpecification::FUNC_MIRROR_X) &&
-            lcd->getBasicAttributes().basic_bus_spec.isFunctionValid(LCD::BasicBusSpecification::FUNC_MIRROR_Y)) {
-        disp_drv.drv_update_cb = update_callback;
-    } else {
-        disp_drv.sw_rotate = 1;
-    }
 #endif
     disp_drv.draw_buf = &disp_buf;
     disp_drv.user_data = (void *)lcd;
@@ -393,36 +272,3 @@ bool lvgl_port_unlock(void)
     return true;
 }
 
-bool lvgl_port_deinit(void)
-{
-#if !LV_TICK_CUSTOM
-    ESP_UTILS_CHECK_FALSE_RETURN(tick_deinit(), false, "Deinitialize LVGL tick failed");
-#endif
-
-    ESP_UTILS_CHECK_FALSE_RETURN(lvgl_port_lock(-1), false, "Lock LVGL failed");
-    if (lvgl_task_handle != nullptr) {
-        vTaskDelete(lvgl_task_handle);
-        lvgl_task_handle = nullptr;
-    }
-    ESP_UTILS_CHECK_FALSE_RETURN(lvgl_port_unlock(), false, "Unlock LVGL failed");
-
-#if LV_ENABLE_GC || !LV_MEM_CUSTOM
-    lv_deinit();
-#else
-    ESP_UTILS_LOGW("LVGL memory is custom, `lv_deinit()` will not work");
-#endif
-#if !LVGL_PORT_AVOID_TEAR
-    for (int i = 0; i < LVGL_PORT_BUFFER_NUM; i++) {
-        if (lvgl_buf[i] != nullptr) {
-            free(lvgl_buf[i]);
-            lvgl_buf[i] = nullptr;
-        }
-    }
-#endif
-    if (lvgl_mux != nullptr) {
-        vSemaphoreDelete(lvgl_mux);
-        lvgl_mux = nullptr;
-    }
-
-    return true;
-}

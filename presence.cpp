@@ -26,6 +26,7 @@ bool presence_detected() {
     g_rawTransitionMs = now;
   }
 
+  // Accept a presence state only after it has remained stable for 120 ms.
   if ((now - g_rawTransitionMs) >= kPresenceDebounceMs) {
     g_debouncedPresenceHigh = g_rawPresenceHigh;
   }
