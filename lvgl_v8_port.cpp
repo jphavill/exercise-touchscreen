@@ -20,6 +20,8 @@ static SemaphoreHandle_t lvgl_mux = nullptr;
 static TaskHandle_t lvgl_task_handle = nullptr;
 static esp_timer_handle_t lvgl_tick_timer = NULL;
 static void *lvgl_buf[LVGL_PORT_BUFFER_NUM_MAX] = {};
+static lvgl_port_touch_activity_callback_t touch_activity_callback = nullptr;
+static bool touch_was_pressed = false;
 
 static void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
 {
@@ -110,12 +112,22 @@ static void touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
 
     int read_touch_result = tp->readPoints(&point, 1, 0);
     if (read_touch_result > 0) {
+        if (!touch_was_pressed && touch_activity_callback != nullptr) {
+            touch_activity_callback();
+        }
+        touch_was_pressed = true;
         data->point.x = point.x;
         data->point.y = point.y;
         data->state = LV_INDEV_STATE_PRESSED;
     } else {
+        touch_was_pressed = false;
         data->state = LV_INDEV_STATE_RELEASED;
     }
+}
+
+void lvgl_port_set_touch_activity_callback(lvgl_port_touch_activity_callback_t callback)
+{
+    touch_activity_callback = callback;
 }
 
 static lv_indev_t *indev_init(Touch *tp)

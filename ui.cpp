@@ -53,7 +53,6 @@ static lv_obj_t* g_refreshBtn = nullptr;
 static lv_obj_t* g_heatCells[30] = {nullptr};
 
 static ui_action_callback_t g_refreshCallback = nullptr;
-static ui_action_callback_t g_tapWakeCallback = nullptr;
 
 static constexpr lv_coord_t kHeatCellSize = 46;
 static constexpr lv_coord_t kHeatGridGap = 10;
@@ -94,15 +93,8 @@ static void on_refresh_btn(lv_event_t* e) {
   }
 }
 
-static void on_tap_wake(lv_event_t* e) {
-  if (lv_event_get_code(e) == LV_EVENT_PRESSED && g_tapWakeCallback != nullptr) {
-    g_tapWakeCallback();
-  }
-}
-
 static void register_tap_target(lv_obj_t* obj) {
   lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_add_event_cb(obj, on_tap_wake, LV_EVENT_PRESSED, nullptr);
 }
 
 static void apply_base_screen_style(lv_obj_t* obj) {
@@ -322,8 +314,4 @@ void ui_set_all(const PullupDashboardData& data) {
 
 void ui_set_refresh_callback(ui_action_callback_t callback) {
   g_refreshCallback = callback;
-}
-
-void ui_set_tap_wake_callback(ui_action_callback_t callback) {
-  g_tapWakeCallback = callback;
 }

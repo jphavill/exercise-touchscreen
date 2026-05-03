@@ -27,6 +27,7 @@ struct RuntimeState {
 static RuntimeState g_runtime = {};
 static Board* g_board = nullptr;
 static bool g_displayReady = false;
+static volatile bool g_displayActivityPending = false;
 
 static void refresh_from_api();
 
@@ -66,12 +67,12 @@ static void mark_activity_and_wake() {
 }
 
 static void on_refresh_button() {
-  mark_activity_and_wake();
+  g_displayActivityPending = true;
   refresh_from_api();
 }
 
 static void on_tap_wake() {
-  mark_activity_and_wake();
+  g_displayActivityPending = true;
 }
 
 static void refresh_from_api() {
@@ -114,7 +115,7 @@ void setup() {
     lvgl_port_unlock();
   }
   ui_set_refresh_callback(on_refresh_button);
-  ui_set_tap_wake_callback(on_tap_wake);
+  lvgl_port_set_touch_activity_callback(on_tap_wake);
 
   mark_activity_and_wake();
 
@@ -139,13 +140,17 @@ void loop() {
     return;
   }
 
-  const uint32_t now = millis();
+  if (g_displayActivityPending) {
+    g_displayActivityPending = false;
+    mark_activity_and_wake();
+  }
 
   if (presence_detected()) {
     mark_activity_and_wake();
   }
 
-  display_power_repaint_after_wake(g_runtime.displayPower);
+  const uint32_t now = millis();
+
   display_power_handle_inactivity(g_runtime.displayPower, now, BACKLIGHT_OFF_TIMEOUT_MS);
 
   if ((now - g_runtime.lastApiFetchMs) >= API_REFRESH_MS) {

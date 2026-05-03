@@ -68,7 +68,10 @@
 extern "C" {
 #endif
 
+typedef void (*lvgl_port_touch_activity_callback_t)(void);
+
 bool lvgl_port_init(esp_panel::drivers::LCD *lcd, esp_panel::drivers::Touch *tp);
+void lvgl_port_set_touch_activity_callback(lvgl_port_touch_activity_callback_t callback);
 bool lvgl_port_lock(int timeout_ms);
 bool lvgl_port_unlock(void);
 

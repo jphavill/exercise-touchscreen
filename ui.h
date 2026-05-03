@@ -14,4 +14,3 @@ void ui_set_heatmap(const DayEntry days[30]);
 void ui_set_all(const PullupDashboardData& data);
 
 void ui_set_refresh_callback(ui_action_callback_t callback);
-void ui_set_tap_wake_callback(ui_action_callback_t callback);
