@@ -41,15 +41,11 @@
 #ifdef CONFIG_LVGL_PORT_AVOID_TEARING_MODE
 #define LVGL_PORT_AVOID_TEARING_MODE            (CONFIG_LVGL_PORT_AVOID_TEARING_MODE)
 #else
-#define LVGL_PORT_AVOID_TEARING_MODE            (0)
+#define LVGL_PORT_AVOID_TEARING_MODE            (3)
 #endif
 
 #if LVGL_PORT_AVOID_TEARING_MODE != 0
-#ifdef CONFIG_LVGL_PORT_ROTATION_DEGREE
-#define LVGL_PORT_ROTATION_DEGREE               (CONFIG_LVGL_PORT_ROTATION_DEGREE)
-#else
 #define LVGL_PORT_ROTATION_DEGREE               (0)
-#endif
 
 #define LVGL_PORT_AVOID_TEAR                    (1)
 
@@ -66,15 +62,6 @@
     #error "Invalid LVGL_PORT_AVOID_TEARING_MODE"
 #endif
 
-#if (LVGL_PORT_ROTATION_DEGREE != 0) && (LVGL_PORT_ROTATION_DEGREE != 90) && \
-    (LVGL_PORT_ROTATION_DEGREE != 180) && (LVGL_PORT_ROTATION_DEGREE != 270)
-    #error "Invalid LVGL_PORT_ROTATION_DEGREE"
-#elif LVGL_PORT_ROTATION_DEGREE != 0
-    #ifdef LVGL_PORT_DISP_BUFFER_NUM
-        #undef LVGL_PORT_DISP_BUFFER_NUM
-        #define LVGL_PORT_DISP_BUFFER_NUM       (3)
-    #endif
-#endif
 #endif
 
 #ifdef __cplusplus

@@ -14,7 +14,6 @@
 
 using namespace esp_panel::drivers;
 
-#define LVGL_PORT_ENABLE_ROTATION_OPTIMIZED     (1)
 #define LVGL_PORT_BUFFER_NUM_MAX                (2)
 
 static SemaphoreHandle_t lvgl_mux = nullptr;
@@ -22,328 +21,8 @@ static TaskHandle_t lvgl_task_handle = nullptr;
 static esp_timer_handle_t lvgl_tick_timer = NULL;
 static void *lvgl_buf[LVGL_PORT_BUFFER_NUM_MAX] = {};
 
-#if LVGL_PORT_ROTATION_DEGREE != 0
-static void *get_next_frame_buffer(LCD *lcd)
-{
-    static void *next_fb = NULL;
-    static void *fbs[2] = { NULL };
-
-    if (next_fb == NULL) {
-        fbs[0] = lcd->getFrameBufferByIndex(0);
-        fbs[1] = lcd->getFrameBufferByIndex(1);
-        next_fb = fbs[1];
-    } else {
-        next_fb = (next_fb == fbs[0]) ? fbs[1] : fbs[0];
-    }
-
-    return next_fb;
-}
-
-__attribute__((always_inline))
-static inline void copy_pixel_8bpp(uint8_t *to, const uint8_t *from)
-{
-    *to++ = *from++;
-}
-
-__attribute__((always_inline))
-static inline void copy_pixel_16bpp(uint8_t *to, const uint8_t *from)
-{
-    *(uint16_t *)to++ = *(const uint16_t *)from++;
-}
-
-__attribute__((always_inline))
-static inline void copy_pixel_24bpp(uint8_t *to, const uint8_t *from)
-{
-    *to++ = *from++;
-    *to++ = *from++;
-    *to++ = *from++;
-}
-
-#define _COPY_PIXEL(_bpp, to, from) copy_pixel_##_bpp##bpp(to, from)
-#define COPY_PIXEL(_bpp, to, from)  _COPY_PIXEL(_bpp, to, from)
-
-#define ROTATE_90_ALL_BPP() \
-    { \
-        to_bytes_per_line = h * to_bytes_per_piexl; \
-        to_index_const = (w - x_start - 1) * to_bytes_per_line; \
-        for (int from_y = y_start; from_y < y_end + 1; from_y++) { \
-            from_index = from_y * from_bytes_per_line + x_start * from_bytes_per_piexl; \
-            to_index = to_index_const + from_y * to_bytes_per_piexl; \
-            for (int from_x = x_start; from_x < x_end + 1; from_x++) { \
-                COPY_PIXEL(LV_COLOR_DEPTH, to + to_index, from + from_index); \
-                from_index += from_bytes_per_piexl; \
-                to_index -= to_bytes_per_line; \
-            } \
-        } \
-    }
-
-#define ROTATE_90_OPTIMIZED_16BPP(block_w, block_h) \
-    { \
-        for (int i = 0; i < h; i += block_h) { \
-            max_height = (i + block_h > h) ? h : (i + block_h); \
-            for (int j = 0; j < w; j += block_w) { \
-                max_width = (j + block_w > w) ? w : (j + block_w); \
-                start_y = w - 1 - j;   \
-                for (int x = i; x < max_height; x++) { \
-                    from_next = (uint16_t *)from + x * w; \
-                    for (int y = j, mirrored_y = start_y; y < max_width; y += 4, mirrored_y -= 4) { \
-                        ((uint16_t *)to)[(mirrored_y) * h + x] = *((uint32_t *)(from_next + y)) & 0xFFFF; \
-                        ((uint16_t *)to)[(mirrored_y - 1) * h + x] = (*((uint32_t *)(from_next + y)) >> 16) & 0xFFFF; \
-                        ((uint16_t *)to)[(mirrored_y - 2) * h + x] = *((uint32_t *)(from_next + y + 2)) & 0xFFFF; \
-                        ((uint16_t *)to)[(mirrored_y - 3) * h + x] = (*((uint32_t *)(from_next + y + 2)) >> 16) & 0xFFFF; \
-                    } \
-                } \
-            } \
-        } \
-    }
-
-#define ROTATE_180_ALL_BPP() \
-    { \
-        to_bytes_per_line = w * to_bytes_per_piexl; \
-        to_index_const = (h - 1) * to_bytes_per_line + (w - x_start - 1) * to_bytes_per_piexl; \
-        for (int from_y = y_start; from_y < y_end + 1; from_y++) { \
-            from_index = from_y * from_bytes_per_line + x_start * from_bytes_per_piexl; \
-            to_index = to_index_const - from_y * to_bytes_per_line; \
-            for (int from_x = x_start; from_x < x_end + 1; from_x++) { \
-                COPY_PIXEL(LV_COLOR_DEPTH, to + to_index, from + from_index); \
-                from_index += from_bytes_per_piexl; \
-                to_index -= to_bytes_per_piexl; \
-            } \
-        } \
-    }
-
-#define ROTATE_270_OPTIMIZED_16BPP(block_w, block_h) \
-    { \
-        for (int i = 0; i < h; i += block_h) { \
-            max_height = i + block_h > h ? h : i + block_h; \
-            for (int j = 0; j < w; j += block_w) { \
-                max_width = j + block_w > w ? w : j + block_w; \
-                for (int x = i; x < max_height; x++) { \
-                    from_next = (uint16_t *)from + x * w; \
-                    for (int y = j; y < max_width; y += 4) { \
-                        ((uint16_t *)to)[y * h + (h - 1 - x)] = *((uint32_t *)(from_next + y)) & 0xFFFF; \
-                        ((uint16_t *)to)[(y + 1) * h + (h - 1 - x)] = (*((uint32_t *)(from_next + y)) >> 16) & 0xFFFF; \
-                        ((uint16_t *)to)[(y + 2) * h + (h - 1 - x)] = *((uint32_t *)(from_next + y + 2)) & 0xFFFF; \
-                        ((uint16_t *)to)[(y + 3) * h + (h - 1 - x)] = (*((uint32_t *)(from_next + y + 2)) >> 16) & 0xFFFF; \
-                    } \
-                } \
-            } \
-        } \
-    }
-
-#define ROTATE_270_ALL_BPP() \
-    { \
-        to_bytes_per_line = h * to_bytes_per_piexl; \
-        from_index_const = x_start * from_bytes_per_piexl; \
-        to_index_const = x_start * to_bytes_per_line + (h - 1) * to_bytes_per_piexl; \
-        for (int from_y = y_start; from_y < y_end + 1; from_y++) { \
-            from_index = from_y * from_bytes_per_line + from_index_const; \
-            to_index = to_index_const - from_y * to_bytes_per_piexl; \
-            for (int from_x = x_start; from_x < x_end + 1; from_x++) { \
-                COPY_PIXEL(LV_COLOR_DEPTH, to + to_index, from + from_index); \
-                from_index += from_bytes_per_piexl; \
-                to_index += to_bytes_per_line; \
-            } \
-        } \
-    }
-
-__attribute__((always_inline))
-IRAM_ATTR static inline void rotate_copy_pixel(
-    const uint8_t *from, uint8_t *to, uint16_t x_start, uint16_t y_start, uint16_t x_end, uint16_t y_end, uint16_t w,
-    uint16_t h, uint16_t rotate
-)
-{
-    int from_bytes_per_piexl = sizeof(lv_color_t);
-    int from_bytes_per_line = w * from_bytes_per_piexl;
-    int from_index = 0;
-
-    int to_bytes_per_piexl = LV_COLOR_DEPTH >> 3;
-    int to_bytes_per_line;
-    int to_index = 0;
-    int to_index_const = 0;
-
-#if (LV_COLOR_DEPTH == 16) && LVGL_PORT_ENABLE_ROTATION_OPTIMIZED
-    int max_height = 0;
-    int max_width = 0;
-    int start_y = 0;
-    uint16_t *from_next = NULL;
-#endif
-
-    switch (rotate) {
-    case 90:
-#if (LV_COLOR_DEPTH == 16) && LVGL_PORT_ENABLE_ROTATION_OPTIMIZED
-        ROTATE_90_OPTIMIZED_16BPP(32, 256);
-#else
-        ROTATE_90_ALL_BPP();
-#endif
-        break;
-    case 180:
-        ROTATE_180_ALL_BPP();
-        break;
-    case 270:
-#if (LV_COLOR_DEPTH == 16) && LVGL_PORT_ENABLE_ROTATION_OPTIMIZED
-        ROTATE_270_OPTIMIZED_16BPP(32, 256);
-#else
-        int from_index_const = 0;
-        ROTATE_270_ALL_BPP();
-#endif
-        break;
-    default:
-        break;
-    }
-}
-#endif
-
 #if LVGL_PORT_AVOID_TEAR
 #if LVGL_PORT_DIRECT_MODE
-#if LVGL_PORT_ROTATION_DEGREE != 0
-typedef struct {
-    uint16_t inv_p;
-    uint8_t inv_area_joined[LV_INV_BUF_SIZE];
-    lv_area_t inv_areas[LV_INV_BUF_SIZE];
-} lv_port_dirty_area_t;
-
-static lv_port_dirty_area_t dirty_area;
-
-static void flush_dirty_save(lv_port_dirty_area_t *dirty_area)
-{
-    lv_disp_t *disp = _lv_refr_get_disp_refreshing();
-    dirty_area->inv_p = disp->inv_p;
-    for (int i = 0; i < disp->inv_p; i++) {
-        dirty_area->inv_area_joined[i] = disp->inv_area_joined[i];
-        dirty_area->inv_areas[i] = disp->inv_areas[i];
-    }
-}
-
-typedef enum {
-    FLUSH_STATUS_PART,
-    FLUSH_STATUS_FULL
-} lv_port_flush_status_t;
-
-typedef enum {
-    FLUSH_PROBE_PART_COPY,
-    FLUSH_PROBE_SKIP_COPY,
-    FLUSH_PROBE_FULL_COPY,
-} lv_port_flush_probe_t;
-
-static lv_port_flush_probe_t flush_copy_probe(lv_disp_drv_t *drv)
-{
-    static lv_port_flush_status_t prev_status = FLUSH_STATUS_PART;
-    lv_port_flush_status_t cur_status;
-    lv_port_flush_probe_t probe_result;
-    lv_disp_t *disp_refr = _lv_refr_get_disp_refreshing();
-
-    uint32_t flush_ver = 0;
-    uint32_t flush_hor = 0;
-    for (int i = 0; i < disp_refr->inv_p; i++) {
-        if (disp_refr->inv_area_joined[i] == 0) {
-            flush_ver = (disp_refr->inv_areas[i].y2 + 1 - disp_refr->inv_areas[i].y1);
-            flush_hor = (disp_refr->inv_areas[i].x2 + 1 - disp_refr->inv_areas[i].x1);
-            break;
-        }
-    }
-    cur_status = ((flush_ver == drv->ver_res) && (flush_hor == drv->hor_res)) ? (FLUSH_STATUS_FULL) : (FLUSH_STATUS_PART);
-
-    if (prev_status == FLUSH_STATUS_FULL) {
-        if ((cur_status == FLUSH_STATUS_PART)) {
-            probe_result = FLUSH_PROBE_FULL_COPY;
-        } else {
-            probe_result = FLUSH_PROBE_SKIP_COPY;
-        }
-    } else {
-        probe_result = FLUSH_PROBE_PART_COPY;
-    }
-    prev_status = cur_status;
-
-    return probe_result;
-}
-
-static inline void *flush_get_next_buf(LCD *lcd)
-{
-    return get_next_frame_buffer(lcd);
-}
-
-static void flush_dirty_copy(void *dst, void *src, lv_port_dirty_area_t *dirty_area)
-{
-    lv_coord_t x_start, x_end, y_start, y_end;
-    for (int i = 0; i < dirty_area->inv_p; i++) {
-        if (dirty_area->inv_area_joined[i] == 0) {
-            x_start = dirty_area->inv_areas[i].x1;
-            x_end = dirty_area->inv_areas[i].x2;
-            y_start = dirty_area->inv_areas[i].y1;
-            y_end = dirty_area->inv_areas[i].y2;
-
-            rotate_copy_pixel(
-                (uint8_t *)src, (uint8_t *)dst, x_start, y_start, x_end, y_end, LV_HOR_RES, LV_VER_RES,
-                LVGL_PORT_ROTATION_DEGREE
-            );
-        }
-    }
-}
-
-static void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
-{
-    LCD *lcd = (LCD *)drv->user_data;
-    const int offsetx1 = area->x1;
-    const int offsetx2 = area->x2;
-    const int offsety1 = area->y1;
-    const int offsety2 = area->y2;
-    void *next_fb = NULL;
-    lv_port_flush_probe_t probe_result = FLUSH_PROBE_PART_COPY;
-    lv_disp_t *disp = lv_disp_get_default();
-
-    if (lv_disp_flush_is_last(drv)) {
-        if (drv->full_refresh) {
-            drv->full_refresh = 0;
-
-            next_fb = flush_get_next_buf(lcd);
-            rotate_copy_pixel(
-                (uint8_t *)color_map, (uint8_t *)next_fb, offsetx1, offsety1, offsetx2, offsety2,
-                LV_HOR_RES, LV_VER_RES, LVGL_PORT_ROTATION_DEGREE
-            );
-
-            lcd->switchFrameBufferTo(next_fb);
-
-            ulTaskNotifyValueClear(NULL, ULONG_MAX);
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-            flush_dirty_copy(flush_get_next_buf(lcd), color_map, &dirty_area);
-            flush_get_next_buf(lcd);
-        } else {
-            probe_result = flush_copy_probe(drv);
-
-            if (probe_result == FLUSH_PROBE_FULL_COPY) {
-                flush_dirty_save(&dirty_area);
-
-                drv->full_refresh = 1;
-                disp->rendering_in_progress = false;
-                lv_disp_flush_ready(drv);
-
-                lv_refr_now(_lv_refr_get_disp_refreshing());
-            } else {
-                next_fb = flush_get_next_buf(lcd);
-                flush_dirty_save(&dirty_area);
-                flush_dirty_copy(next_fb, color_map, &dirty_area);
-
-                lcd->switchFrameBufferTo(next_fb);
-
-                ulTaskNotifyValueClear(NULL, ULONG_MAX);
-                ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-                if (probe_result == FLUSH_PROBE_PART_COPY) {
-                    flush_dirty_save(&dirty_area);
-                    flush_dirty_copy(flush_get_next_buf(lcd), color_map, &dirty_area);
-                    flush_get_next_buf(lcd);
-                }
-            }
-        }
-    }
-
-    lv_disp_flush_ready(drv);
-}
-
-#else
-
 static void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
 {
     LCD *lcd = (LCD *)drv->user_data;
@@ -357,7 +36,6 @@ static void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t
 
     lv_disp_flush_ready(drv);
 }
-#endif
 
 #elif LVGL_PORT_FULL_REFRESH && LVGL_PORT_DISP_BUFFER_NUM == 2
 
@@ -375,30 +53,14 @@ static void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t
 
 #elif LVGL_PORT_FULL_REFRESH && LVGL_PORT_DISP_BUFFER_NUM == 3
 
-#if LVGL_PORT_ROTATION_DEGREE == 0
 static void *lvgl_port_lcd_last_buf = NULL;
 static void *lvgl_port_lcd_next_buf = NULL;
 static void *lvgl_port_flush_next_buf = NULL;
-#endif
 
 void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
 {
     LCD *lcd = (LCD *)drv->user_data;
 
-#if LVGL_PORT_ROTATION_DEGREE != 0
-    const int offsetx1 = area->x1;
-    const int offsetx2 = area->x2;
-    const int offsety1 = area->y1;
-    const int offsety2 = area->y2;
-    void *next_fb = get_next_frame_buffer(lcd);
-
-    rotate_copy_pixel(
-        (uint8_t *)color_map, (uint8_t *)next_fb, offsetx1, offsety1, offsetx2, offsety2, LV_HOR_RES,
-        LV_VER_RES, LVGL_PORT_ROTATION_DEGREE
-    );
-
-    lcd->switchFrameBufferTo(next_fb);
-#else
     drv->draw_buf->buf1 = color_map;
     drv->draw_buf->buf2 = lvgl_port_flush_next_buf;
     lvgl_port_flush_next_buf = color_map;
@@ -406,7 +68,6 @@ void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color
     lcd->switchFrameBufferTo(color_map);
 
     lvgl_port_lcd_next_buf = color_map;
-#endif
 
     lv_disp_flush_ready(drv);
 }
@@ -415,7 +76,7 @@ void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color
 IRAM_ATTR bool onLcdVsyncCallback(void *user_data)
 {
     BaseType_t need_yield = pdFALSE;
-#if LVGL_PORT_FULL_REFRESH && (LVGL_PORT_DISP_BUFFER_NUM == 3) && (LVGL_PORT_ROTATION_DEGREE == 0)
+#if LVGL_PORT_FULL_REFRESH && (LVGL_PORT_DISP_BUFFER_NUM == 3)
     if (lvgl_port_lcd_next_buf != lvgl_port_lcd_last_buf) {
         lvgl_port_flush_next_buf = lvgl_port_lcd_last_buf;
         lvgl_port_lcd_last_buf = lvgl_port_lcd_next_buf;
@@ -518,14 +179,12 @@ static lv_disp_t *display_init(LCD *lcd)
     }
 #else
     buffer_size = lcd_width * lcd_height;
-#if (LVGL_PORT_DISP_BUFFER_NUM >= 3) && (LVGL_PORT_ROTATION_DEGREE == 0) && LVGL_PORT_FULL_REFRESH
+#if (LVGL_PORT_DISP_BUFFER_NUM >= 3) && LVGL_PORT_FULL_REFRESH
     lvgl_port_lcd_last_buf = lcd->getFrameBufferByIndex(0);
     lvgl_buf[0] = lcd->getFrameBufferByIndex(1);
     lvgl_buf[1] = lcd->getFrameBufferByIndex(2);
     lvgl_port_lcd_next_buf = lvgl_port_lcd_last_buf;
     lvgl_port_flush_next_buf = lvgl_buf[1];
-#elif (LVGL_PORT_DISP_BUFFER_NUM >= 3) && (LVGL_PORT_ROTATION_DEGREE != 0)
-    lvgl_buf[0] = lcd->getFrameBufferByIndex(2);
 #elif LVGL_PORT_DISP_BUFFER_NUM >= 2
     for (int i = 0; (i < LVGL_PORT_DISP_BUFFER_NUM) && (i < LVGL_PORT_BUFFER_NUM_MAX); i++) {
         lvgl_buf[i] = lcd->getFrameBufferByIndex(i);
@@ -538,13 +197,8 @@ static lv_disp_t *display_init(LCD *lcd)
     ESP_UTILS_LOGD("Register display driver to LVGL");
     lv_disp_drv_init(&disp_drv);
     disp_drv.flush_cb = flush_callback;
-#if (LVGL_PORT_ROTATION_DEGREE == 90) || (LVGL_PORT_ROTATION_DEGREE == 270)
-    disp_drv.hor_res = lcd_height;
-    disp_drv.ver_res = lcd_width;
-#else
     disp_drv.hor_res = lcd_width;
     disp_drv.ver_res = lcd_height;
-#endif
 #if LVGL_PORT_AVOID_TEAR
 #if LVGL_PORT_FULL_REFRESH
     disp_drv.full_refresh = 1;
@@ -703,20 +357,6 @@ bool lvgl_port_init(LCD *lcd, Touch *tp)
         ESP_UTILS_LOGD("Initialize LVGL input driver");
         indev = indev_init(tp);
         ESP_UTILS_CHECK_NULL_RETURN(indev, false, "Initialize LVGL input driver failed");
-
-#if LVGL_PORT_ROTATION_DEGREE != 0
-        auto &transformation = tp->getTransformation();
-#if LVGL_PORT_ROTATION_DEGREE == 90
-        tp->swapXY(!transformation.swap_xy);
-        tp->mirrorY(!transformation.mirror_y);
-#elif LVGL_PORT_ROTATION_DEGREE == 180
-        tp->mirrorX(!transformation.mirror_x);
-        tp->mirrorY(!transformation.mirror_y);
-#elif LVGL_PORT_ROTATION_DEGREE == 270
-        tp->swapXY(!transformation.swap_xy);
-        tp->mirrorX(!transformation.mirror_x);
-#endif
-#endif
     }
 
     ESP_UTILS_LOGD("Create mutex for LVGL");
