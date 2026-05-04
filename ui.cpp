@@ -44,10 +44,10 @@
 #define UI_FONT_BUTTON LV_FONT_DEFAULT
 #endif
 
-static lv_obj_t* s_dashboardContainer = nullptr;
-static lv_obj_t* s_workoutSelectionContainer = nullptr;
-static lv_obj_t* s_workoutContainer = nullptr;
-static lv_obj_t* s_offlineContainer = nullptr;
+static lv_obj_t* s_dashboardScreen = nullptr;
+static lv_obj_t* s_workoutSelectionScreen = nullptr;
+static lv_obj_t* s_workoutScreen = nullptr;
+static lv_obj_t* s_offlineScreen = nullptr;
 static lv_obj_t* s_todayLabel = nullptr;
 static lv_obj_t* s_goalLabel = nullptr;
 static lv_obj_t* s_yearLabel = nullptr;
@@ -82,7 +82,7 @@ static constexpr lv_coord_t kHeatGridGap = 10;
 static constexpr lv_coord_t kHeatWrapPad = 8;
 static constexpr uint8_t kHeatColCount = 10;
 static constexpr uint8_t kHeatRowCount = 3;
-static constexpr uint16_t kNavAnimMs = 250;
+static constexpr uint16_t kNavAnimMs = 240;
 static constexpr lv_coord_t kScreenPad = 24;
 static constexpr lv_coord_t kGridGap = 16;
 static constexpr lv_coord_t kSectionGap = 20;
@@ -96,52 +96,27 @@ static lv_coord_t kWorkoutCols[] = {LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_FR(1),
                                     LV_GRID_TEMPLATE_LAST};
 static lv_coord_t kWorkoutRows[] = {LV_GRID_FR(1), LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST};
 
-static lv_obj_t* page_container(UiPage page) {
+static lv_obj_t* page_screen(UiPage page) {
   switch (page) {
     case UiPage::Dashboard:
-      return s_dashboardContainer;
+      return s_dashboardScreen;
     case UiPage::WorkoutSelection:
-      return s_workoutSelectionContainer;
+      return s_workoutSelectionScreen;
     case UiPage::Workout:
-      return s_workoutContainer;
+      return s_workoutScreen;
   }
   return nullptr;
 }
 
 static void show_page(UiPage page, bool forward) {
-  lv_obj_t* next = page_container(page);
-  lv_obj_t* current = page_container(s_currentPage);
-  if (next == nullptr || next == current) {
+  lv_obj_t* next = page_screen(page);
+  if (next == nullptr || page == s_currentPage) {
     return;
   }
 
-  const lv_coord_t screenWidth = lv_obj_get_width(lv_scr_act());
-  const lv_coord_t startX = forward ? screenWidth : -screenWidth;
-
-  lv_obj_add_flag(s_offlineContainer, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_flag(s_refreshBtn, LV_OBJ_FLAG_HIDDEN);
-  if (page == UiPage::Dashboard) {
-    lv_obj_clear_flag(s_refreshBtn, LV_OBJ_FLAG_HIDDEN);
-  }
-
-  lv_obj_set_x(next, startX);
-  lv_obj_clear_flag(next, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_move_foreground(next);
-  if (page == UiPage::Dashboard) {
-    lv_obj_move_foreground(s_refreshBtn);
-  }
-
-  lv_anim_t anim;
-  lv_anim_init(&anim);
-  lv_anim_set_var(&anim, next);
-  lv_anim_set_values(&anim, startX, 0);
-  lv_anim_set_time(&anim, kNavAnimMs);
-  lv_anim_set_exec_cb(&anim, (lv_anim_exec_xcb_t)lv_obj_set_x);
-  lv_anim_start(&anim);
-
-  if (current != nullptr) {
-    lv_obj_add_flag(current, LV_OBJ_FLAG_HIDDEN);
-  }
+  const lv_scr_load_anim_t anim = forward ? LV_SCR_LOAD_ANIM_MOVE_LEFT
+                                          : LV_SCR_LOAD_ANIM_MOVE_RIGHT;
+  lv_scr_load_anim(next, anim, kNavAnimMs, 0, false);
   s_currentPage = page;
 }
 
@@ -249,25 +224,17 @@ static void apply_base_screen_style(lv_obj_t* obj) {
 }
 
 void ui_init() {
-  lv_obj_t* scr = lv_scr_act();
-  apply_base_screen_style(scr);
-
-  register_tap_target(scr);
-
-  s_dashboardContainer = lv_obj_create(scr);
-  lv_obj_remove_style_all(s_dashboardContainer);
-  lv_obj_set_size(s_dashboardContainer, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_color(s_dashboardContainer, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_bg_opa(s_dashboardContainer, LV_OPA_COVER, 0);
-  lv_obj_set_style_pad_all(s_dashboardContainer, kScreenPad, 0);
-  lv_obj_set_layout(s_dashboardContainer, LV_LAYOUT_FLEX);
-  lv_obj_set_flex_flow(s_dashboardContainer, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(s_dashboardContainer, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+  s_dashboardScreen = lv_obj_create(nullptr);
+  apply_base_screen_style(s_dashboardScreen);
+  lv_obj_set_style_pad_all(s_dashboardScreen, kScreenPad, 0);
+  lv_obj_set_layout(s_dashboardScreen, LV_LAYOUT_FLEX);
+  lv_obj_set_flex_flow(s_dashboardScreen, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(s_dashboardScreen, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_add_event_cb(s_dashboardContainer, on_dashboard_gesture, LV_EVENT_GESTURE, nullptr);
-  register_gesture_root(s_dashboardContainer);
+  lv_obj_add_event_cb(s_dashboardScreen, on_dashboard_gesture, LV_EVENT_GESTURE, nullptr);
+  register_gesture_root(s_dashboardScreen);
 
-  lv_obj_t* metricsCol = lv_obj_create(s_dashboardContainer);
+  lv_obj_t* metricsCol = lv_obj_create(s_dashboardScreen);
   lv_obj_remove_style_all(metricsCol);
   lv_obj_set_size(metricsCol, LV_PCT(44), LV_PCT(100));
   lv_obj_set_layout(metricsCol, LV_LAYOUT_FLEX);
@@ -297,7 +264,7 @@ void ui_init() {
   lv_obj_set_style_text_color(s_yearLabel, lv_color_hex(0xB9C8D8), 0);
   lv_obj_set_style_text_font(s_yearLabel, UI_FONT_META, 0);
 
-  s_refreshBtn = lv_btn_create(scr);
+  s_refreshBtn = lv_btn_create(s_dashboardScreen);
   lv_obj_set_size(s_refreshBtn, 160, 54);
   lv_obj_set_style_bg_color(s_refreshBtn, lv_color_hex(0x78C7FF), 0);
   lv_obj_set_style_bg_opa(s_refreshBtn, LV_OPA_70, 0);
@@ -314,7 +281,7 @@ void ui_init() {
   lv_obj_set_style_text_font(refreshLabel, UI_FONT_BUTTON, 0);
   lv_obj_center(refreshLabel);
 
-  lv_obj_t* heatmapWrap = lv_obj_create(s_dashboardContainer);
+  lv_obj_t* heatmapWrap = lv_obj_create(s_dashboardScreen);
   lv_obj_remove_style_all(heatmapWrap);
   lv_obj_set_size(
       heatmapWrap,
@@ -348,26 +315,22 @@ void ui_init() {
     s_heatCells[i] = cell;
   }
 
-  s_workoutSelectionContainer = lv_obj_create(scr);
-  lv_obj_remove_style_all(s_workoutSelectionContainer);
-  lv_obj_set_size(s_workoutSelectionContainer, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_color(s_workoutSelectionContainer, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_bg_opa(s_workoutSelectionContainer, LV_OPA_COVER, 0);
-  lv_obj_set_style_text_color(s_workoutSelectionContainer, lv_color_hex(0xF2F7FF), 0);
-  lv_obj_set_style_pad_all(s_workoutSelectionContainer, kScreenPad, 0);
-  lv_obj_set_layout(s_workoutSelectionContainer, LV_LAYOUT_FLEX);
-  lv_obj_set_flex_flow(s_workoutSelectionContainer, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_style_pad_row(s_workoutSelectionContainer, kSectionGap, 0);
-  lv_obj_add_event_cb(s_workoutSelectionContainer, on_workout_selection_gesture, LV_EVENT_GESTURE,
+  s_workoutSelectionScreen = lv_obj_create(nullptr);
+  apply_base_screen_style(s_workoutSelectionScreen);
+  lv_obj_set_style_pad_all(s_workoutSelectionScreen, kScreenPad, 0);
+  lv_obj_set_layout(s_workoutSelectionScreen, LV_LAYOUT_FLEX);
+  lv_obj_set_flex_flow(s_workoutSelectionScreen, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_style_pad_row(s_workoutSelectionScreen, kSectionGap, 0);
+  lv_obj_add_event_cb(s_workoutSelectionScreen, on_workout_selection_gesture, LV_EVENT_GESTURE,
                       nullptr);
-  register_gesture_root(s_workoutSelectionContainer);
+  register_gesture_root(s_workoutSelectionScreen);
 
-  lv_obj_t* workoutSelectionTitle = lv_label_create(s_workoutSelectionContainer);
+  lv_obj_t* workoutSelectionTitle = lv_label_create(s_workoutSelectionScreen);
   lv_label_set_text(workoutSelectionTitle, "Workouts");
   lv_obj_set_style_text_color(workoutSelectionTitle, lv_color_hex(0xF2F7FF), 0);
   lv_obj_set_style_text_font(workoutSelectionTitle, UI_FONT_TITLE, 0);
 
-  lv_obj_t* workoutGrid = lv_obj_create(s_workoutSelectionContainer);
+  lv_obj_t* workoutGrid = lv_obj_create(s_workoutSelectionScreen);
   lv_obj_remove_style_all(workoutGrid);
   lv_obj_set_width(workoutGrid, LV_PCT(100));
   lv_obj_set_flex_grow(workoutGrid, 1);
@@ -413,16 +376,12 @@ void ui_init() {
     lv_obj_set_style_text_font(cardMeta, UI_FONT_BUTTON, 0);
   }
 
-  s_workoutContainer = lv_obj_create(scr);
-  lv_obj_remove_style_all(s_workoutContainer);
-  lv_obj_set_size(s_workoutContainer, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_color(s_workoutContainer, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_bg_opa(s_workoutContainer, LV_OPA_COVER, 0);
-  lv_obj_set_style_text_color(s_workoutContainer, lv_color_hex(0xF2F7FF), 0);
-  lv_obj_set_style_pad_all(s_workoutContainer, kScreenPad, 0);
-  register_tap_target(s_workoutContainer);
+  s_workoutScreen = lv_obj_create(nullptr);
+  apply_base_screen_style(s_workoutScreen);
+  lv_obj_set_style_pad_all(s_workoutScreen, kScreenPad, 0);
+  register_tap_target(s_workoutScreen);
 
-  lv_obj_t* workoutBackBtn = lv_btn_create(s_workoutContainer);
+  lv_obj_t* workoutBackBtn = lv_btn_create(s_workoutScreen);
   lv_obj_set_size(workoutBackBtn, 72, 54);
   lv_obj_set_style_bg_color(workoutBackBtn, lv_color_hex(0x78C7FF), 0);
   lv_obj_set_style_bg_opa(workoutBackBtn, LV_OPA_30, 0);
@@ -438,7 +397,7 @@ void ui_init() {
   lv_obj_set_style_text_font(workoutBackLabel, UI_FONT_BUTTON, 0);
   lv_obj_center(workoutBackLabel);
 
-  lv_obj_t* workoutContent = lv_obj_create(s_workoutContainer);
+  lv_obj_t* workoutContent = lv_obj_create(s_workoutScreen);
   lv_obj_remove_style_all(workoutContent);
   lv_obj_set_size(workoutContent, LV_PCT(100), LV_PCT(100));
   lv_obj_set_layout(workoutContent, LV_LAYOUT_FLEX);
@@ -459,27 +418,21 @@ void ui_init() {
   lv_obj_set_style_text_font(s_workoutIdLabel, UI_FONT_META, 0);
   lv_obj_move_foreground(workoutBackBtn);
 
-  lv_obj_add_flag(s_workoutSelectionContainer, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_flag(s_workoutContainer, LV_OBJ_FLAG_HIDDEN);
-
-  s_offlineContainer = lv_obj_create(scr);
-  lv_obj_remove_style_all(s_offlineContainer);
-  lv_obj_set_size(s_offlineContainer, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_color(s_offlineContainer, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_bg_opa(s_offlineContainer, LV_OPA_COVER, 0);
-  lv_obj_set_layout(s_offlineContainer, LV_LAYOUT_FLEX);
-  lv_obj_set_flex_flow(s_offlineContainer, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(s_offlineContainer, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+  s_offlineScreen = lv_obj_create(nullptr);
+  apply_base_screen_style(s_offlineScreen);
+  lv_obj_set_layout(s_offlineScreen, LV_LAYOUT_FLEX);
+  lv_obj_set_flex_flow(s_offlineScreen, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(s_offlineScreen, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(s_offlineContainer, 8, 0);
-  register_tap_target(s_offlineContainer);
+  lv_obj_set_style_pad_row(s_offlineScreen, 8, 0);
+  register_tap_target(s_offlineScreen);
 
-  lv_obj_t* offlineTitle = lv_label_create(s_offlineContainer);
+  lv_obj_t* offlineTitle = lv_label_create(s_offlineScreen);
   lv_label_set_text(offlineTitle, "Offline");
   lv_obj_set_style_text_color(offlineTitle, lv_color_hex(0xF2F7FF), 0);
   lv_obj_set_style_text_font(offlineTitle, UI_FONT_OFFLINE_TITLE, 0);
 
-  lv_obj_t* offlineRefreshBtn = lv_btn_create(s_offlineContainer);
+  lv_obj_t* offlineRefreshBtn = lv_btn_create(s_offlineScreen);
   lv_obj_set_size(offlineRefreshBtn, 160, 54);
   lv_obj_set_style_bg_color(offlineRefreshBtn, lv_color_hex(0x78C7FF), 0);
   lv_obj_set_style_bg_opa(offlineRefreshBtn, LV_OPA_70, 0);
@@ -494,7 +447,7 @@ void ui_init() {
   lv_obj_set_style_text_font(offlineRefreshLabel, UI_FONT_BUTTON, 0);
   lv_obj_center(offlineRefreshLabel);
 
-  lv_obj_t* offlineSub = lv_label_create(s_offlineContainer);
+  lv_obj_t* offlineSub = lv_label_create(s_offlineScreen);
   lv_label_set_text(offlineSub, "Unable to reach API");
   lv_obj_set_style_text_color(offlineSub, lv_color_hex(0xB9C8D8), 0);
   lv_obj_set_style_text_font(offlineSub, UI_FONT_OFFLINE_SUB, 0);
@@ -503,31 +456,18 @@ void ui_init() {
 }
 
 void ui_show_dashboard() {
-  if (s_dashboardContainer == nullptr || s_workoutSelectionContainer == nullptr ||
-      s_workoutContainer == nullptr || s_offlineContainer == nullptr || s_refreshBtn == nullptr) {
+  if (s_dashboardScreen == nullptr) {
     return;
   }
-  lv_obj_clear_flag(s_dashboardContainer, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_flag(s_workoutSelectionContainer, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_flag(s_workoutContainer, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_flag(s_offlineContainer, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_clear_flag(s_refreshBtn, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_x(s_dashboardContainer, 0);
-  lv_obj_move_foreground(s_refreshBtn);
+  lv_scr_load(s_dashboardScreen);
   s_currentPage = UiPage::Dashboard;
 }
 
 void ui_show_offline() {
-  if (s_dashboardContainer == nullptr || s_workoutSelectionContainer == nullptr ||
-      s_workoutContainer == nullptr || s_offlineContainer == nullptr || s_refreshBtn == nullptr) {
+  if (s_offlineScreen == nullptr) {
     return;
   }
-  lv_obj_add_flag(s_dashboardContainer, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_flag(s_workoutSelectionContainer, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_flag(s_workoutContainer, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_clear_flag(s_offlineContainer, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_move_foreground(s_offlineContainer);
-  lv_obj_add_flag(s_refreshBtn, LV_OBJ_FLAG_HIDDEN);
+  lv_scr_load(s_offlineScreen);
 }
 
 void ui_set_today(uint16_t todayCount) {
