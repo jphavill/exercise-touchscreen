@@ -10,21 +10,21 @@ Display/backlight activity is driven by a presence sensor and touch events.
     - initializes display/touch/LVGL, power, presence
     - initializes UI and callback wiring
     - connects Wi-Fi and fetches initial API data
-    - runs loop for presence wake, inactivity sleep, and periodic API refresh
+    - runs loop for touch/presence activity, inactivity sleep, and periodic API refresh
 - `ui.cpp` / `ui.h`
   - LVGL object tree and view-state handling.
   - Two top-level states:
     - Dashboard (metrics + heatmap)
     - Offline (message + refresh button)
   - Public setters for metrics and heatmap.
-  - Touch/tap wake hooks and refresh button event callback registration.
+  - Refresh button event callback registration.
 - `wifi_api.cpp` / `wifi_api.h`
   - Wi-Fi connection helper.
   - HTTP GET to API endpoint with timezone header.
   - JSON payload parsing into `PullupDashboardData`.
 - `models.h`
   - Data model:
-    - `DayEntry` (`date`, `count`, `heatLevel`)
+    - `DayEntry` (`count`, `heatLevel`)
     - `PullupDashboardData` (`yearTotal`, `dailyGoal`, `days[30]`, `valid`)
 - `presence.cpp` / `presence.h`
   - Presence sensor GPIO setup and debounce logic.
@@ -34,12 +34,16 @@ Display/backlight activity is driven by a presence sensor and touch events.
   - LEDC PWM setup with ESP32 Arduino version compatibility.
   - Digital GPIO fallback if PWM attach fails.
   - Caches backlight state to avoid redundant writes.
+- `display_power_controller.cpp` / `display_power_controller.h`
+  - Tracks last display activity and sleep state.
+  - Turns the backlight on for activity and off after the configured inactivity timeout.
 - `lvgl_v8_port.cpp` / `lvgl_v8_port.h`
   - LVGL + panel/touch integration layer.
   - Initializes LVGL display/input drivers and tick timer.
   - Creates dedicated LVGL task.
+  - Reports first touch press activity through `lvgl_port_set_touch_activity_callback()`.
   - Exposes LVGL recursive mutex lock/unlock API for thread-safe UI updates.
-  - Configures tearing-avoid behavior for RGB/MIPI where enabled.
+  - Uses direct-mode tearing avoidance by default with board frame buffers.
 - `config.h`
   - Runtime constants:
     - Wi-Fi credentials mapping from `secrets.h`
@@ -56,7 +60,7 @@ Display/backlight activity is driven by a presence sensor and touch events.
   - Template for local Wi-Fi credentials (`secrets.h` not committed).
 - `esp_panel_*_conf.h`, `esp_utils_conf.h`
   - Espressif panel/utils library compile-time configuration.
-  - Board selection + broad driver enablement options.
+  - Board selection and driver trimming for the active RGB bus, ST7262 LCD, GT911 touch, I2C bus, and LEDC PWM backlight setup.
 ## Runtime flow
 1. Boot
    - Serial starts.
@@ -72,8 +76,7 @@ Display/backlight activity is driven by a presence sensor and touch events.
    - Fetch API data via `api_fetch_data()`.
    - Show dashboard on success, offline screen on failure.
 4. Main loop
-   - Presence polling updates activity timestamp and wakes display.
-   - Wake repaint pass(es) force screen redraw after sleep-to-wake.
+   - Pending touch activity and debounced presence polling update the display activity timestamp and wake the backlight.
    - Inactivity timeout turns backlight off and marks display sleeping.
    - Periodic API refresh runs every `API_REFRESH_MS`.
 ## Concurrency and rendering model
@@ -88,5 +91,5 @@ Display/backlight activity is driven by a presence sensor and touch events.
   - `daily_goal` (uint16)
   - `last_30_days` array of exactly 30 items
 - Each day requires:
-  - `date` (string), `count` (uint16), `heat_level` (uint8)
+  - `count` (uint16), `heat_level` (uint8)
 - UI currently treats `days[29]` as “today”.
