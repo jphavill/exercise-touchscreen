@@ -53,7 +53,20 @@ WorkoutSelectionScreen workout_selection_screen_create(
   lv_obj_set_style_pad_column(workoutGrid, kGridGap, 0);
   ui_register_tap_target(workoutGrid);
 
-  for (uint8_t i = 0; i < routineCount; i++) {
+  const uint8_t renderCount =
+      routines == nullptr ? 0 : (routineCount > kMaxWorkouts ? kMaxWorkouts : routineCount);
+  if (renderCount == 0) {
+    lv_obj_t* emptyLabel = lv_label_create(workoutGrid);
+    lv_label_set_text(emptyLabel, "No workouts available");
+    lv_obj_set_style_text_color(emptyLabel, lv_color_hex(0xB9C8D8), 0);
+    lv_obj_set_style_text_font(emptyLabel, UI_FONT_META, 0);
+    lv_obj_set_style_text_align(emptyLabel, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_grid_cell(emptyLabel, LV_GRID_ALIGN_CENTER, 0, 3, LV_GRID_ALIGN_CENTER, 0, 2);
+    ui_register_tap_target(emptyLabel);
+    return screen;
+  }
+
+  for (uint8_t i = 0; i < renderCount; i++) {
     const WorkoutRoutine& routine = routines[i];
     lv_obj_t* card = lv_obj_create(workoutGrid);
     lv_obj_remove_style_all(card);
@@ -70,7 +83,8 @@ WorkoutSelectionScreen workout_selection_screen_create(
     lv_obj_set_style_pad_row(card, 10, 0);
     lv_obj_set_grid_cell(card, LV_GRID_ALIGN_STRETCH, i % 3, 1, LV_GRID_ALIGN_STRETCH, i / 3, 1);
 
-    lv_obj_add_event_cb(card, on_workout_card, LV_EVENT_CLICKED, const_cast<WorkoutRoutine*>(&routines[i]));
+    lv_obj_add_event_cb(card, on_workout_card, LV_EVENT_CLICKED,
+                        const_cast<WorkoutRoutine*>(&routines[i]));
     ui_register_tap_target(card);
 
     lv_obj_t* cardTitle = lv_label_create(card);

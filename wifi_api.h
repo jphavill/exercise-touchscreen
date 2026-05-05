@@ -3,4 +3,5 @@
 #include "models.h"
 
 bool wifi_connect();
-bool api_fetch_data(PullupDashboardData& outData);
+bool fetch_dashboard_data(PullupDashboardData& outData);
+bool fetch_workouts(WorkoutCache& outCache);

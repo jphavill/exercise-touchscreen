@@ -6,8 +6,11 @@
 // Network/API constants
 constexpr char WIFI_SSID[] = SECRET_WIFI_SSID;
 constexpr char WIFI_PASSWORD[] = SECRET_WIFI_PASSWORD;
-constexpr char API_URL[] = "http://192.168.1.208:8003/api/widgets/pullups";
-const uint32_t API_REFRESH_MS = 60000;
+constexpr char DASHBOARD_API_URL[] = "http://192.168.1.208:8003/api/widgets/pullups";
+constexpr char WORKOUTS_API_URL[] = "http://192.168.1.208:8003/api/workouts";
+const uint32_t DASHBOARD_API_REFRESH_MS = 60000;
+const uint32_t WORKOUT_CACHE_REFRESH_MS = 60000;
+const uint16_t API_HTTP_TIMEOUT_MS = 5000;
 
 // Wi-Fi connect behavior
 const uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;

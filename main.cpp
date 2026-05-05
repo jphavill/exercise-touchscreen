@@ -16,14 +16,16 @@
 #include "presence.h"
 #include "ui.h"
 #include "wifi_api.h"
+#include "workout_cache.h"
 
 using namespace esp_panel::board;
 
 struct RuntimeState {
-  uint32_t lastApiFetchMs;
+  uint32_t lastDashboardFetchMs;
   DisplayPowerController displayPower;
   bool hasDashboardData;
-  bool showingOffline;
+  bool dashboardHealthy;
+  bool workoutsHealthy;
 };
 
 static RuntimeState g_runtime = {};
@@ -32,6 +34,17 @@ static bool g_displayReady = false;
 static volatile bool g_displayActivityPending = false;
 
 static void refresh_from_api();
+static void refresh_workouts_once();
+static void refresh_workouts_if_idle(uint32_t now);
+
+static void sync_offline_modal_locked() {
+  if (g_runtime.dashboardHealthy && g_runtime.workoutsHealthy) {
+    ui_hide_offline();
+    return;
+  }
+
+  ui_show_offline();
+}
 
 static bool init_display_and_touch() {
   Serial.println("[BOOT] init_display_and_touch: start");
@@ -71,6 +84,7 @@ static void mark_activity_and_wake() {
 static void on_refresh_button() {
   g_displayActivityPending = true;
   refresh_from_api();
+  refresh_workouts_once();
 }
 
 static void on_tap_wake() {
@@ -79,7 +93,7 @@ static void on_tap_wake() {
 
 static void refresh_from_api() {
   PullupDashboardData data = {};
-  const bool apiOk = api_fetch_data(data) && data.valid;
+  const bool apiOk = fetch_dashboard_data(data) && data.valid;
 
   if (!lvgl_port_lock(-1)) {
     return;
@@ -89,17 +103,55 @@ static void refresh_from_api() {
     ui_set_all(data);
     if (!g_runtime.hasDashboardData) {
       ui_show_dashboard();
-    } else if (g_runtime.showingOffline) {
-      ui_hide_offline();
     }
     g_runtime.hasDashboardData = true;
-    g_runtime.showingOffline = false;
-  } else {
-    ui_show_offline();
-    g_runtime.showingOffline = true;
   }
 
+  g_runtime.dashboardHealthy = apiOk;
+  sync_offline_modal_locked();
+
   lvgl_port_unlock();
+}
+
+static void push_cached_workouts_to_ui_locked() {
+  uint8_t count = 0;
+  const WorkoutRoutine* routines = workout_cache_get_workouts(&count);
+  ui_set_workouts(routines, count);
+}
+
+static void handle_workout_refresh_result_locked(bool apiOk) {
+  const bool hasCachedWorkouts = workout_cache_has_workouts();
+  g_runtime.workoutsHealthy = apiOk || hasCachedWorkouts;
+  if (hasCachedWorkouts) {
+    push_cached_workouts_to_ui_locked();
+  }
+  sync_offline_modal_locked();
+}
+
+static void refresh_workouts_once() {
+  const bool apiOk = workout_cache_refresh();
+
+  if (lvgl_port_lock(-1)) {
+    handle_workout_refresh_result_locked(apiOk);
+    lvgl_port_unlock();
+  }
+}
+
+static void refresh_workouts_if_idle(uint32_t now) {
+  if (ui_is_workout_running() || ui_is_workout_page_active()) {
+    return;
+  }
+
+  bool refreshed = false;
+  const bool apiOk = workout_cache_refresh_if_due(now, WORKOUT_CACHE_REFRESH_MS, &refreshed);
+  if (!refreshed) {
+    return;
+  }
+
+  if (lvgl_port_lock(-1)) {
+    handle_workout_refresh_result_locked(apiOk);
+    lvgl_port_unlock();
+  }
 }
 
 void setup() {
@@ -132,15 +184,18 @@ void setup() {
     Serial.println("[BOOT] wifi connect failed");
     if (lvgl_port_lock(-1)) {
       ui_show_offline();
-      g_runtime.showingOffline = true;
+      g_runtime.dashboardHealthy = false;
+      g_runtime.workoutsHealthy = false;
       lvgl_port_unlock();
     }
   } else {
     Serial.println("[BOOT] wifi connected; fetching API");
     refresh_from_api();
+    refresh_workouts_once();
   }
 
-  g_runtime.lastApiFetchMs = millis();
+  const uint32_t bootDoneMs = millis();
+  g_runtime.lastDashboardFetchMs = bootDoneMs;
   Serial.println("[BOOT] setup done");
 }
 
@@ -161,12 +216,18 @@ void loop() {
 
   const uint32_t now = millis();
 
-  display_power_handle_inactivity(g_runtime.displayPower, now, BACKLIGHT_OFF_TIMEOUT_MS);
+  if (ui_should_keep_display_awake()) {
+    mark_activity_and_wake();
+  } else {
+    display_power_handle_inactivity(g_runtime.displayPower, now, BACKLIGHT_OFF_TIMEOUT_MS);
+  }
 
-  if ((now - g_runtime.lastApiFetchMs) >= API_REFRESH_MS) {
-    g_runtime.lastApiFetchMs = now;
+  if ((now - g_runtime.lastDashboardFetchMs) >= DASHBOARD_API_REFRESH_MS) {
+    g_runtime.lastDashboardFetchMs = now;
     refresh_from_api();
   }
+
+  refresh_workouts_if_idle(now);
 
   delay(LVGL_HANDLER_INTERVAL_MS);
 }

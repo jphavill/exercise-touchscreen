@@ -1,18 +1,12 @@
 #pragma once
 
-#include <Arduino.h>
+#include "models.h"
 
 #ifndef LV_CONF_INCLUDE_SIMPLE
 #define LV_CONF_INCLUDE_SIMPLE
 #endif
 
 #include <lvgl.h>
-
-struct WorkoutRoutine {
-  uint16_t id;
-  const char* name;
-  uint16_t durationMin;
-};
 
 using workout_selected_callback_t = void (*)(const WorkoutRoutine& routine);
 
