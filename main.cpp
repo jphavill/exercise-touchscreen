@@ -22,6 +22,8 @@ using namespace esp_panel::board;
 struct RuntimeState {
   uint32_t lastApiFetchMs;
   DisplayPowerController displayPower;
+  bool hasDashboardData;
+  bool showingOffline;
 };
 
 static RuntimeState g_runtime = {};
@@ -85,9 +87,16 @@ static void refresh_from_api() {
 
   if (apiOk) {
     ui_set_all(data);
-    ui_show_dashboard();
+    if (!g_runtime.hasDashboardData) {
+      ui_show_dashboard();
+    } else if (g_runtime.showingOffline) {
+      ui_hide_offline();
+    }
+    g_runtime.hasDashboardData = true;
+    g_runtime.showingOffline = false;
   } else {
     ui_show_offline();
+    g_runtime.showingOffline = true;
   }
 
   lvgl_port_unlock();
@@ -123,6 +132,7 @@ void setup() {
     Serial.println("[BOOT] wifi connect failed");
     if (lvgl_port_lock(-1)) {
       ui_show_offline();
+      g_runtime.showingOffline = true;
       lvgl_port_unlock();
     }
   } else {
